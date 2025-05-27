@@ -62,9 +62,13 @@ def good_suffix_table(pattern: str) -> list[int]:
     Membuat tabel good suffix heuristic untuk BM.
     """
     m = len(pattern)
-    good_suffix = [0] * m
+    if m == 0:
+        return []
+
+    good_suffix = [0] * (m + 1)  # Changed size to m+1
     border_pos = [0] * (m + 1)
 
+    # Preprocessing untuk bad character rule
     i = m
     j = m + 1
     border_pos[i] = j
@@ -78,8 +82,9 @@ def good_suffix_table(pattern: str) -> list[int]:
         j -= 1
         border_pos[i] = j
 
+    # Preprocessing untuk good suffix rule
     j = border_pos[0]
-    for i in range(m + 1):
+    for i in range(m):
         if good_suffix[i] == 0:
             good_suffix[i] = j
         if i == j:
@@ -116,15 +121,3 @@ def bm_search(text: str, pattern: str) -> list[int]:
             s += max(bc_shift, gs_shift)
 
     return result
-
-
-if __name__ == "__main__":
-    # Contoh test sederhana
-    text = "ABABDABACDABABCABAB"
-    pattern = "ABABCABAB"
-
-    print("=== KMP Search ===")
-    print(kmp_search(text, pattern))  # Output: [10]
-
-    print("=== Boyer-Moore Search ===")
-    print(bm_search(text, pattern))  # Output: [10]
