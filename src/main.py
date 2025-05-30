@@ -1,5 +1,5 @@
 import os
-from core.extractor import extract_text_from_pdf, extract_profile_data
+from core.extractor import extract_text_from_pdf, extract_profile_data, print_profile
 from core.matcher import kmp_search, bm_search
 
 
@@ -14,24 +14,23 @@ def read_file(file_path: str) -> str:
 
 
 def main():
-    # Path ke PDF
-    pdf_path = "../data/69532425.pdf"
+    # Path ke PDF (sekarang di folder pdf)
+    pdf_path = "../data/pdf/69532425.pdf"
 
-    # 1. Ekstraksi teks dari PDF (akan menghasilkan 2 file: _regex.txt dan _string.txt)
+    # 1. Ekstraksi teks dari PDF
     text = extract_text_from_pdf(pdf_path)
 
     # 2. Ekstraksi data dengan regex
     profile = extract_profile_data(text)
-    print("\n[INFO] Data yang berhasil diekstrak:\n")
-    for key, value in profile.items():
-        print(f"{key}: {value}")
+    print_profile(profile)
 
     # 3. Demonstrasi string matching
-    base_path = os.path.splitext(pdf_path)[0]
-    string_text = read_file(f"{base_path}_string.txt")
+    filename = os.path.splitext(os.path.basename(pdf_path))[0]
+    string_path = f"../data/string/{filename}_string.txt"
+    string_text = read_file(string_path)
 
     # Pattern yang ingin dicari
-    pattern = "math"  # Contoh pattern
+    pattern = input("Masukkan kata yang ingin dicari:\n> ")
 
     print("\n=== String Matching Demo ===")
     print(f"Mencari pattern: '{pattern}'")

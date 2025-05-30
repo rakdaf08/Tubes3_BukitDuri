@@ -6,21 +6,28 @@ import os
 def extract_text_from_pdf(pdf_path: str) -> str:
     text = ""
     try:
+        base_dir = os.path.dirname(os.path.dirname(pdf_path))
+        regex_dir = os.path.join(base_dir, "regex")
+        string_dir = os.path.join(base_dir, "string")
+
+        os.makedirs(regex_dir, exist_ok=True)
+        os.makedirs(string_dir, exist_ok=True)
+
+        # Extract text from PDF
         with fitz.open(pdf_path) as doc:
             for page in doc:
                 text += page.get_text()
 
-        # Buat base path untuk file output
-        base_path = os.path.splitext(pdf_path)[0]
+        # Get filename without extension
+        filename = os.path.splitext(os.path.basename(pdf_path))[0]
 
-        # Simpan versi untuk regex (format normal)
-        regex_path = f"{base_path}_regex.txt"
+        # Save regex version (normal format)
+        regex_path = os.path.join(regex_dir, f"{filename}_regex.txt")
         with open(regex_path, "w", encoding="utf-8") as f:
             f.write(text)
 
-        # Simpan versi untuk string matching (single line)
-        string_path = f"{base_path}_string.txt"
-        # Bersihkan text: hapus multiple spaces dan newlines
+        # Save string matching version (single line)
+        string_path = os.path.join(string_dir, f"{filename}_string.txt")
         clean_text = " ".join(text.split())
         with open(string_path, "w", encoding="utf-8") as f:
             f.write(clean_text)
@@ -34,100 +41,128 @@ def extract_text_from_pdf(pdf_path: str) -> str:
 
 
 def extract_profile_data(text: str) -> dict:
-    # Inisialisasi hasil default
     profile = {
-        "name": None,
-        "email": None,
-        "phone": None,
         "overview": None,
         "skills": [],
         "experience": [],
         "education": [],
+        "gpa": [],
+        "certifications": [],
+        "achievements": [],
     }
 
-    # Email - Pattern yang lebih ketat
-    email_match = re.search(
-        r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b", text
-    )
-    if email_match:
-        profile["email"] = email_match.group()
-
-    # Nomor telepon - Pattern yang lebih fleksibel
-    phone_match = re.search(
-        r"(?:\+62|62|0)(?:\s*[-()]?\s*\d){9,}", text.replace(" ", "")
-    )
-    if phone_match:
-        profile["phone"] = phone_match.group()
-
-    # Nama - Improved name detection
-    lines = [line.strip() for line in text.splitlines() if line.strip()]
-    for line in lines[:3]:  # Check first 3 non-empty lines
-        if (
-            2 <= len(line.split()) <= 5
-            and not any(char.isdigit() for char in line)
-            and not any(
-                word.lower() in line.lower() for word in ["resume", "cv", "curriculum"]
-            )
-        ):
-            profile["name"] = line
-            break
-
-    # Overview - Improved pattern
-    overview_pattern = r"(?:PROFILE|SUMMARY|OVERVIEW|ABOUT|OBJECTIVE).*?\n(.*?)(?=\n\s*(?:EDUCATION|EXPERIENCE|SKILLS|WORK|EMPLOYMENT)|\Z)"
-    overview_match = re.search(overview_pattern, text, re.IGNORECASE | re.DOTALL)
+    # Overview
+    overview_pattern = r"(?i)(PROFILE|SUMMARY|OVERVIEW|ABOUT|OBJECTIVE)[^\n]*\n+(.*?)(?=\n\s*(EDUCATION|EXPERIENCE|SKILLS|WORK|EMPLOYMENT|TRAINING)|\Z)"
+    overview_match = re.search(overview_pattern, text, re.DOTALL)
     if overview_match:
-        overview_text = overview_match.group(1)
-        # Clean up the overview text
-        overview_text = " ".join(line.strip() for line in overview_text.splitlines())
+        overview_text = " ".join(
+            line.strip() for line in overview_match.group(2).splitlines()
+        )
         profile["overview"] = overview_text.strip()
 
-    # Skills - Improved detection
-    skills_pattern = r"(?:SKILLS|TECHNICAL SKILLS|COMPETENCIES|KEAHLIAN).*?\n(.*?)(?=\n\s*(?:EDUCATION|EXPERIENCE|WORK|EMPLOYMENT)|\Z)"
-    skills_match = re.search(skills_pattern, text, re.IGNORECASE | re.DOTALL)
+    # Skills
+    skills_pattern = r"(?i)^skills\s*\n(.*?)(?=\n\s*(?:accomplishments|certifications|education|experience|work|employment|training)|\Z)"
+    skills_match = re.search(
+        skills_pattern, text, re.IGNORECASE | re.DOTALL | re.MULTILINE
+    )
     if skills_match:
-        skills_text = skills_match.group(1)
-        # Split by common separators
-        skills = re.split(r"[,•\n-]|\s{2,}", skills_text)
+        skills = re.split(r"[,•\n\-]|\s{2,}", skills_match.group(1))
         profile["skills"] = [
-            skill.strip() for skill in skills if len(skill.strip()) > 2
+            skill.strip() for skill in skills if len(skill.strip()) > 1
         ]
 
-    # Experience - Improved pattern
-    exp_pattern = (
-        r"(?:EXPERIENCE|WORK|EMPLOYMENT).*?\n(.*?)(?=\n\s*(?:EDUCATION|SKILLS)|\Z)"
+    # Experience (support "Title MM/YYYY to MM/YYYY" pattern)
+    experience_matches = re.finditer(
+        r"(?i)(.*?)\s+(\d{2}/\d{4})\s+to\s+(\d{2}/\d{4})\n(.*?)(?=\n\S.*?\d{2}/\d{4}\s+to|\Z)",
+        text,
+        re.DOTALL,
     )
-    exp_section = re.search(exp_pattern, text, re.IGNORECASE | re.DOTALL)
-    if exp_section:
-        exp_text = exp_section.group(1)
-        experience_matches = re.finditer(
-            r"(?:(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s*\d{4}|(?:19|20)\d{2})\s*[-–]\s*(?:(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s*\d{4}|(?:19|20)\d{2}|Present|Now|Current|Sekarang).*?\n(.*?)(?=\n\s*(?:\d{4}|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)|\Z)",
-            exp_text,
-            re.IGNORECASE | re.DOTALL,
+    for match in experience_matches:
+        job_title = match.group(1).strip()
+        start = match.group(2)
+        end = match.group(3)
+        description = " ".join(match.group(4).splitlines()).strip()
+        profile["experience"].append(
+            {"title": job_title, "start": start, "end": end, "description": description}
         )
-        for match in experience_matches:
-            exp_text = match.group(0).strip()
-            date_pattern = r"((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s*\d{4}|(?:19|20)\d{2})\s*[-–]\s*((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s*\d{4}|(?:19|20)\d{2}|Present|Now|Current|Sekarang)"
-            dates = re.search(date_pattern, exp_text, re.IGNORECASE)
-            if dates:
-                profile["experience"].append(
-                    {
-                        "start": dates.group(1),
-                        "end": dates.group(2),
-                        "position": " ".join(exp_text.split("\n")[1:]).strip(),
-                    }
-                )
 
-    # Education - Improved pattern
-    edu_pattern = r"(?:EDUCATION|PENDIDIKAN).*?\n(.*?)(?=\n\s*(?:EXPERIENCE|SKILLS|WORK|EMPLOYMENT)|\Z)"
-    edu_section = re.search(edu_pattern, text, re.IGNORECASE | re.DOTALL)
-    if edu_section:
-        edu_text = edu_section.group(1)
-        education_matches = re.finditer(
-            r"(?:(?:19|20)\d{2}[-–]\d{4}|(?:19|20)\d{2})\s*(.*?)(?=\n\s*\d{4}|\Z)",
-            edu_text,
-            re.IGNORECASE | re.DOTALL,
+    # Education (line contains degree, field, and date)
+    edu_pattern = r"(?i)(Bachelor|Associate|Master|Ph\.?D)[^:\n]*[:\s]+(.+?)\s+(May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)?\s*(\d{4})"
+    edu_matches = re.finditer(edu_pattern, text)
+    for match in edu_matches:
+        profile["education"].append(
+            {
+                "degree": match.group(1),
+                "field": match.group(2).strip(),
+                "date": f"{match.group(3)} {match.group(4)}".strip(),
+            }
         )
-        for match in education_matches:
-            profile["education"].append(match.group().strip())
+
+    # GPA
+    gpa_matches = re.findall(r"GPA[-:]?\s*(\d\.\d+)", text)
+    profile["gpa"] = gpa_matches
+
+    # Certifications
+    cert_match = re.search(
+        r"(?i)^certifications\s*\n(.*?)(?=\n\s*(skills|experience|education|accomplishments)|\Z)",
+        text,
+        re.IGNORECASE | re.DOTALL | re.MULTILINE,
+    )
+    if cert_match:
+        certs = re.split(r"[,•\n\-]|\s{2,}", cert_match.group(1))
+        profile["certifications"] = [c.strip() for c in certs if len(c.strip()) > 2]
+
+    # Achievements / Accomplishments
+    achievements_match = re.search(
+        r"(?i)^accomplishments\s*\n(.*?)(?=\n\s*(skills|experience|education|certifications)|\Z)",
+        text,
+        re.IGNORECASE | re.DOTALL | re.MULTILINE,
+    )
+    if achievements_match:
+        items = [
+            line.strip()
+            for line in achievements_match.group(1).splitlines()
+            if line.strip()
+        ]
+        profile["achievements"] = [i.strip() for i in items if len(i.strip()) > 2]
 
     return profile
+
+
+def print_profile(profile: dict):
+    """Print profile data in a formatted way with newlines between sections"""
+    print("\n=== EXTRACTED PROFILE DATA ===\n")
+
+    # Overview
+    print("OVERVIEW:")
+    print(f"{profile['overview']}\n")
+
+    # Skills
+    print("SKILLS:")
+    print("• " + "\n• ".join(profile["skills"]) + "\n")
+
+    # Experience
+    print("EXPERIENCE:")
+    for exp in profile["experience"]:
+        print(f"• {exp['start']} to {exp['end']}")
+        print(f"  {exp['description']}")
+    print()
+
+    # Education
+    print("EDUCATION:")
+    for edu in profile["education"]:
+        print(f"• {edu['degree']} in {edu['field']}")
+        print(f"  Graduated: {edu['date']}")
+    print()
+
+    # GPA
+    print("GPA:")
+    print("• " + "\n• ".join(profile["gpa"]) + "\n")
+
+    # Certifications
+    print("CERTIFICATIONS:")
+    print("• " + "\n• ".join(profile["certifications"]) + "\n")
+
+    # Achievements
+    print("ACHIEVEMENTS:")
+    print("• " + "\n• ".join(profile["achievements"]) + "\n")
