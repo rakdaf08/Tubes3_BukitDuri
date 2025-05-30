@@ -1,6 +1,7 @@
 import os
+import time
 from core.extractor import extract_text_from_pdf, extract_profile_data, print_profile
-from core.matcher import kmp_search, bm_search, fuzzy_search
+from core.matcher import kmp_search, bm_search, fuzzy_search, ac_search
 
 
 def read_file(file_path: str) -> str:
@@ -51,9 +52,10 @@ def main():
     if processed_files:
         print("=== String Matching Demo ===")
         pattern = input("Masukkan kata yang ingin dicari:\n> ")
-        method = int (input("Pilih metode (1: KMP, 2: Boyer-Moore, 3: Aho-Corasick):\n> "))
-        much = int (input("Jumlah hasil yang ingin ditampilkan:\n> "))
+        method = int(input("Pilih metode (1: KMP, 2: Boyer-Moore, 3: Aho-Corasick):\n> "))
+        much = int(input("Jumlah hasil yang ingin ditampilkan:\n> "))
         count = 0
+        total_time = 0  # Track total search time
         
         for rel_path in processed_files:
             if count >= much:
@@ -63,7 +65,11 @@ def main():
             if string_text:
                 # Cari menggunakan KMP
                 if method == 1:
+                    start_time = time.time()
                     kmp_results = kmp_search(string_text, pattern)
+                    search_time = (time.time() - start_time) * 1000  # Convert to milliseconds
+                    total_time += search_time
+                    
                     if len(kmp_results) != 0:
                         print(f"\nKMP Search results in {rel_path}:")
                         print(f"Pattern ditemukan di posisi: {kmp_results}")
@@ -71,28 +77,44 @@ def main():
                         count += 1
 
                 # Cari menggunakan Boyer-Moore
-                if method == 2:
+                elif method == 2:
+                    start_time = time.time()
                     bm_results = bm_search(string_text, pattern)
+                    search_time = (time.time() - start_time) * 1000
+                    total_time += search_time
+                    
                     if len(bm_results) != 0:
                         print(f"\nBoyer-Moore Search results in {rel_path}:")
                         print(f"Pattern ditemukan di posisi: {bm_results}")
                         print(f"Total kemunculan: {len(bm_results)}")
                         count += 1
                         
-                if method == "3":  
+                elif method == 3:  
+                    start_time = time.time()
                     patterns = pattern.split(',')
                     patterns = [p.strip() for p in patterns]
                     ac_results = ac_search(string_text, patterns)
+                    search_time = (time.time() - start_time) * 1000
+                    total_time += search_time
+                    
                     if ac_results:
                         print(f"\nAho-Corasick Search results in {rel_path}:")
+                        # Group results by pattern
+                        pattern_results = {}
                         for pos, pat in ac_results:
-                            print(f"Pattern '{pat}' ditemukan di: {pos}")
+                            if pat not in pattern_results:
+                                pattern_results[pat] = []
+                            pattern_results[pat].append(pos)
+                        
+                        # Print results for each pattern
+                        for pattern, positions in pattern_results.items():
+                            print(f"Pattern '{pattern}' ditemukan di posisi: {positions}")
                         print(f"Total kemunculan: {len(ac_results)}")
                         count += 1
                 
         if count == 0:
             fuzzy = input("Kata tidak ditemukan, apakah kamu ingin menggunakan fuzzy search? (y/n)\n> ")
-            if fuzzy == "y":
+            if fuzzy.lower() == "y":
                 fuzzy_count = 0
                 for rel_path in processed_files:
                     if fuzzy_count >= much:
@@ -100,7 +122,11 @@ def main():
                     string_path = os.path.join(base_dir, "data", "string", f"{rel_path}_string.txt")
                     string_text = read_file(string_path)
                     if string_text:
+                        start_time = time.time()
                         fuzzy_results = fuzzy_search(string_text, pattern)
+                        search_time = (time.time() - start_time) * 1000
+                        total_time += search_time
+                        
                         if fuzzy_results:
                             print(f"\nFuzzy Search results in {rel_path}:")
                             for pos, word, score in fuzzy_results:
@@ -110,6 +136,9 @@ def main():
                     print("Tidak ditemukan hasil dengan fuzzy search.")
             else:
                 print("Oke selamat tinggal!")
+        
+        # Print total search time at the end
+        print(f"\nTotal waktu pencarian: {total_time:.2f} ms")
 
                 
 if __name__ == "__main__":

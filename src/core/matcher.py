@@ -166,7 +166,7 @@ def build_ac_automaton(patterns: list[str]) -> AhoCorasickNode:
 
 def ac_search(text_normal: str, patterns_normal: list[str]) -> list[tuple[int, str]]:
     text = text_normal.lower()
-    patterns = pattern_normal.lower()
+    patterns = [p.lower() for p in patterns_normal]
     
     if not patterns:
         return []
