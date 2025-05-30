@@ -12,37 +12,46 @@ def extract_text_from_pdf(pdf_path: str) -> str:
         pdf_dir = os.path.join(base_dir, "data", "pdf")
         rel_path = os.path.relpath(os.path.dirname(pdf_path), pdf_dir)
         
-        # Create corresponding directories in regex and string folders
+        # Get filename without extension
+        filename = os.path.splitext(os.path.basename(pdf_path))[0]
+        
+        # Setup paths
         regex_dir = os.path.join(base_dir, "data", "regex", rel_path)
         string_dir = os.path.join(base_dir, "data", "string", rel_path)
+        regex_path = os.path.join(regex_dir, f"{filename}_regex.txt")
+        string_path = os.path.join(string_dir, f"{filename}_string.txt")
         
-        os.makedirs(regex_dir, exist_ok=True)
-        os.makedirs(string_dir, exist_ok=True)
-
-        # Extract text from PDF
+        # Check if both files already exist
+        if os.path.exists(regex_path) and os.path.exists(string_path):
+            # Read existing regex file for text content
+            with open(regex_path, "r", encoding="utf-8") as f:
+                return f.read()
+        
+        # If files don't exist, process the PDF
         with fitz.open(pdf_path) as doc:
             for page in doc:
                 text += page.get_text()
 
-        # Get filename without extension
-        filename = os.path.splitext(os.path.basename(pdf_path))[0]
+        # Create directories if needed
+        os.makedirs(regex_dir, exist_ok=True)
+        os.makedirs(string_dir, exist_ok=True)
 
-        # Save regex version (normal format)
-        regex_path = os.path.join(regex_dir, f"{filename}_regex.txt")
+        # Save regex version
         with open(regex_path, "w", encoding="utf-8") as f:
             f.write(text)
 
-        # Save string matching version (single line)
-        string_path = os.path.join(string_dir, f"{filename}_string.txt")
+        # Save string matching version
         clean_text = " ".join(text.split())
         with open(string_path, "w", encoding="utf-8") as f:
             f.write(clean_text)
 
-        print(f"[INFO] Berhasil menyimpan file regex: {regex_path}")
-        print(f"[INFO] Berhasil menyimpan file string matching: {string_path}")
+        print(f"[INFO] Created new files for {filename}")
+        print(f"[INFO] Regex file: {regex_path}")
+        print(f"[INFO] String file: {string_path}")
 
     except Exception as e:
-        print(f"[ERROR] Gagal membaca PDF {pdf_path}: {e}")
+        print(f"[ERROR] Error processing PDF {pdf_path}: {e}")
+    
     return text
 
 def extract_profile_data(text: str) -> dict:

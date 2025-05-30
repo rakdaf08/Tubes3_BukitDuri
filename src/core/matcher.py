@@ -1,3 +1,7 @@
+from fuzzywuzzy import fuzz
+import re
+from typing import List, Tuple
+
 def compute_lps(pattern: str) -> list[int]:
     """
     Membuat tabel lps (longest prefix suffix) untuk KMP.
@@ -20,15 +24,14 @@ def compute_lps(pattern: str) -> list[int]:
     return lps
 
 
-def kmp_search(text: str, pattern: str) -> list[int]:
-    """
-    Cari pattern dalam text menggunakan KMP.
-    Return list indeks posisi pattern ditemukan.
-    """
+def kmp_search(text_normal: str, pattern_normal: str) -> list[int]:
+    text = text_normal.lower()
+    pattern = pattern_normal.lower()
+    
     lps = compute_lps(pattern)
     result = []
-    i = 0  # index text
-    j = 0  # index pattern
+    i = 0 
+    j = 0 
 
     while i < len(text):
         if text[i] == pattern[j]:
@@ -47,10 +50,6 @@ def kmp_search(text: str, pattern: str) -> list[int]:
 
 
 def bad_character_table(pattern: str) -> dict:
-    """
-    Membuat tabel bad character heuristic untuk BM.
-    Menyimpan posisi kanan terakhir setiap karakter dalam pattern.
-    """
     table = {}
     for i, ch in enumerate(pattern):
         table[ch] = i
@@ -58,17 +57,13 @@ def bad_character_table(pattern: str) -> dict:
 
 
 def good_suffix_table(pattern: str) -> list[int]:
-    """
-    Membuat tabel good suffix heuristic untuk BM.
-    """
     m = len(pattern)
     if m == 0:
         return []
 
-    good_suffix = [0] * (m + 1)  # Changed size to m+1
+    good_suffix = [0] * (m + 1) 
     border_pos = [0] * (m + 1)
 
-    # Preprocessing untuk bad character rule
     i = m
     j = m + 1
     border_pos[i] = j
@@ -82,7 +77,6 @@ def good_suffix_table(pattern: str) -> list[int]:
         j -= 1
         border_pos[i] = j
 
-    # Preprocessing untuk good suffix rule
     j = border_pos[0]
     for i in range(m):
         if good_suffix[i] == 0:
@@ -93,11 +87,10 @@ def good_suffix_table(pattern: str) -> list[int]:
     return good_suffix[1:]
 
 
-def bm_search(text: str, pattern: str) -> list[int]:
-    """
-    Cari pattern dalam text menggunakan Boyer-Moore.
-    Return list indeks posisi pattern ditemukan.
-    """
+def bm_search(text_normal: str, pattern_normal: str) -> list[int]:
+    text = text_normal.lower()
+    pattern = pattern_normal.lower()
+    
     if len(pattern) == 0:
         return []
 
@@ -105,7 +98,7 @@ def bm_search(text: str, pattern: str) -> list[int]:
     good_suffix = good_suffix_table(pattern)
     result = []
 
-    s = 0  # posisi shift pattern terhadap text
+    s = 0 
     while s <= len(text) - len(pattern):
         j = len(pattern) - 1
 
@@ -121,3 +114,76 @@ def bm_search(text: str, pattern: str) -> list[int]:
             s += max(bc_shift, gs_shift)
 
     return result
+
+
+def fuzzy_search(text: str, pattern: str, threshold: int = 60) -> list[tuple[int, str, int]]:
+    results = []
+    words = re.findall(r'\w+', text)
+    
+    for i, word in enumerate(words):
+        score = fuzz.ratio(pattern.lower(), word.lower())
+        if score >= threshold:
+            pos = text.find(word)
+            results.append((pos, word, score))
+            
+    return sorted(results, key=lambda x: x[2], reverse=True)
+
+
+class AhoCorasickNode:
+    def __init__(self):
+        self.goto = {}
+        self.out = []
+        self.fail = None
+
+def build_ac_automaton(patterns: list[str]) -> AhoCorasickNode:
+    root = AhoCorasickNode()
+
+    # Build trie
+    for i, pattern in enumerate(patterns):
+        node = root
+        for c in pattern:
+            if c not in node.goto:
+                node.goto[c] = AhoCorasickNode()
+            node = node.goto[c]
+        node.out.append((i, pattern))
+
+    queue = []
+    for c, node in root.goto.items():
+        queue.append(node)
+        node.fail = root
+
+    while queue:
+        current = queue.pop(0)
+        for c, node in current.goto.items():
+            queue.append(node)
+            failure = current.fail
+            while failure and c not in failure.goto:
+                failure = failure.fail
+            node.fail = failure.goto[c] if failure else root
+            node.out.extend(node.fail.out)
+
+    return root
+
+def ac_search(text_normal: str, patterns_normal: list[str]) -> list[tuple[int, str]]:
+    text = text_normal.lower()
+    patterns = pattern_normal.lower()
+    
+    if not patterns:
+        return []
+
+    root = build_ac_automaton(patterns)
+    current = root
+    results = []
+
+    for i, c in enumerate(text):
+        while current and c not in current.goto:
+            current = current.fail
+        if not current:
+            current = root
+            continue
+        current = current.goto[c]
+        for pattern_id, pattern in current.out:
+            pos = i - len(pattern) + 1
+            results.append((pos, pattern))
+
+    return sorted(results)
