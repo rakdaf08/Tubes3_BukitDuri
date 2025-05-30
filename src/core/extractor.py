@@ -6,10 +6,16 @@ import os
 def extract_text_from_pdf(pdf_path: str) -> str:
     text = ""
     try:
-        base_dir = os.path.dirname(os.path.dirname(pdf_path))
-        regex_dir = os.path.join(base_dir, "regex")
-        string_dir = os.path.join(base_dir, "string")
-
+        base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        
+        # Get relative path structure from pdf_dir
+        pdf_dir = os.path.join(base_dir, "data", "pdf")
+        rel_path = os.path.relpath(os.path.dirname(pdf_path), pdf_dir)
+        
+        # Create corresponding directories in regex and string folders
+        regex_dir = os.path.join(base_dir, "data", "regex", rel_path)
+        string_dir = os.path.join(base_dir, "data", "string", rel_path)
+        
         os.makedirs(regex_dir, exist_ok=True)
         os.makedirs(string_dir, exist_ok=True)
 
@@ -38,7 +44,6 @@ def extract_text_from_pdf(pdf_path: str) -> str:
     except Exception as e:
         print(f"[ERROR] Gagal membaca PDF {pdf_path}: {e}")
     return text
-
 
 def extract_profile_data(text: str) -> dict:
     profile = {
