@@ -1,8 +1,18 @@
 import os
 import time
+import getpass
 from core.extractor import extract_text_from_pdf, extract_profile_data, print_profile
 from core.matcher import kmp_search, bm_search, fuzzy_search, ac_search
+from db.db_connector import DatabaseManager
 
+MYSQL_PASSWORD = None
+
+def get_mysql_password():
+    """Get MySQL password from user"""
+    global MYSQL_PASSWORD
+    if MYSQL_PASSWORD is None:
+        MYSQL_PASSWORD = getpass.getpass("Enter MySQL root password: ") #123
+    return MYSQL_PASSWORD
 
 def read_file(file_path: str) -> str:
     try:
@@ -12,134 +22,226 @@ def read_file(file_path: str) -> str:
         print(f"[ERROR] Gagal membaca file {file_path}: {e}")
         return ""
 
+def database_search_demo(db: DatabaseManager):
+    """Demo pencarian menggunakan database"""
+    print("\n=== Database Search Demo ===")
+    print("1. Search by keyword")
+    print("2. Search by category")
+    print("3. Search by skill")
+    print("4. Advanced search")
+    print("5. View statistics")
+    
+    choice = input("Pilih opsi (1-5): ")
+    
+    if choice == "1":
+        keyword = input("Masukkan keyword: ")
+        start_time = time.time()
+        results = db.search_resumes_by_criteria(keyword)
+        search_time = (time.time() - start_time) * 1000
+        
+        print(f"\nDitemukan {len(results)} hasil dalam {search_time:.2f} ms:")
+        for i, resume in enumerate(results[:5], 1):
+            print(f"{i}. {resume['filename']} ({resume['category']})")
+            if resume.get('relevance_score', 0) > 0:
+                print(f"   Relevance: {resume['relevance_score']:.2f}")
+    
+    elif choice == "2":
+        categories = db.get_all_categories()
+        print("Available categories:")
+        for i, cat in enumerate(categories, 1):
+            print(f"{i}. {cat}")
+        
+        try:
+            cat_choice = int(input("Pilih kategori (nomor): ")) - 1
+            if 0 <= cat_choice < len(categories):
+                category = categories[cat_choice]
+                results = db.search_resumes_by_criteria("", category=category)
+                print(f"\nDitemukan {len(results)} resume dalam kategori {category}:")
+                for i, resume in enumerate(results[:10], 1):
+                    print(f"{i}. {resume['filename']}")
+        except (ValueError, IndexError):
+            print("Pilihan tidak valid")
+    
+    elif choice == "3":
+        skill = input("Masukkan skill yang dicari: ")
+        results = db.search_resumes_by_criteria("", skill_filter=skill)
+        print(f"\nDitemukan {len(results)} resume dengan skill '{skill}':")
+        for i, resume in enumerate(results[:5], 1):
+            print(f"{i}. {resume['filename']} ({resume['category']})")
+    
+    elif choice == "4":
+        keyword = input("Keyword (opsional): ") or None
+        category = input("Category (opsional): ") or None
+        skill = input("Skill (opsional): ") or None
+        experience = input("Experience keyword (opsional): ") or None
+        
+        results = db.search_resumes_by_criteria(
+            keyword, category=category, 
+            skill_filter=skill, experience_filter=experience
+        )
+        print(f"\nDitemukan {len(results)} hasil:")
+        for i, resume in enumerate(results[:5], 1):
+            print(f"{i}. {resume['filename']} ({resume['category']})")
+    
+    elif choice == "5":
+        stats = db.get_statistics()
+        print(f"\n=== Database Statistics ===")
+        print(f"Total resumes: {stats.get('total_resumes', 0)}")
+        print(f"Total searches: {stats.get('total_searches', 0)}")
+        
+        print(f"\nResumes by category:")
+        for cat_stat in stats.get('resumes_by_category', [])[:10]:
+            print(f"  {cat_stat['category']}: {cat_stat['count']}")
 
-def get_all_pdf_files(pdf_dir: str) -> list:
-    pdf_files = []
-    for root, _, files in os.walk(pdf_dir):
+def string_matching_demo():
+    """Demo algoritma string matching pada file"""
+    print("\n=== String Matching Demo ===")
+    
+    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    
+    string_dir = os.path.join(base_dir, "data", "string")
+    if not os.path.exists(string_dir):
+        print("Data string directory not found. Please run setup first.")
+        return
+    
+    string_files = []
+    for root, dirs, files in os.walk(string_dir):
         for file in files:
-            if file.endswith('.pdf'):
-                pdf_files.append(os.path.join(root, file))
-    return pdf_files
+            if file.endswith('_string.txt'):
+                rel_path = os.path.relpath(os.path.join(root, file), string_dir)
+                string_files.append(rel_path)
+    
+    if not string_files:
+        print("No processed string files found.")
+        return
+    
+    pattern = input("Masukkan kata yang ingin dicari: ")
+    print("Pilih algoritma:")
+    print("1. KMP")
+    print("2. Boyer-Moore") 
+    print("3. Aho-Corasick (multiple patterns)")
+    print("4. Fuzzy Search")
+    
+    method = int(input("Pilih metode (1-4): "))
+    much = int(input("Jumlah hasil yang ingin ditampilkan: "))
+    
+    count = 0
+    total_time = 0
+    
+    for string_file in string_files[:much*2]:  
+        if count >= much:
+            break
+            
+        file_path = os.path.join(string_dir, string_file)
+        text = read_file(file_path)
+        if not text:
+            continue
+            
+        display_name = string_file.replace('_string.txt', '')
+        
+        if method == 1:  # KMP
+            start_time = time.time()
+            results = kmp_search(text, pattern)
+            search_time = (time.time() - start_time) * 1000
+            total_time += search_time
+            
+            if results:
+                print(f"\nKMP Search results in {display_name}:")
+                print(f"Pattern ditemukan di posisi: {results[:10]}")  # Show first 10
+                print(f"Total kemunculan: {len(results)}")
+                count += 1
+                
+        elif method == 2:  # Boyer-Moore
+            start_time = time.time()
+            results = bm_search(text, pattern)
+            search_time = (time.time() - start_time) * 1000
+            total_time += search_time
+            
+            if results:
+                print(f"\nBoyer-Moore Search results in {display_name}:")
+                print(f"Pattern ditemukan di posisi: {results[:10]}")
+                print(f"Total kemunculan: {len(results)}")
+                count += 1
+                
+        elif method == 3:  # Aho-Corasick
+            patterns = pattern.split(',')
+            patterns = [p.strip() for p in patterns]
+            
+            start_time = time.time()
+            results = ac_search(text, patterns)
+            search_time = (time.time() - start_time) * 1000
+            total_time += search_time
+            
+            if results:
+                print(f"\nAho-Corasick Search results in {display_name}:")
+                pattern_results = {}
+                for pos, pat in results:
+                    if pat not in pattern_results:
+                        pattern_results[pat] = []
+                    pattern_results[pat].append(pos)
+                
+                for pat, positions in pattern_results.items():
+                    print(f"Pattern '{pat}' ditemukan di posisi: {positions[:5]}")  # Show first 5
+                print(f"Total kemunculan: {len(results)}")
+                count += 1
+                
+        elif method == 4:  # Fuzzy Search
+            start_time = time.time()
+            results = fuzzy_search(text, pattern)
+            search_time = (time.time() - start_time) * 1000
+            total_time += search_time
+            
+            if results:
+                print(f"\nFuzzy Search results in {display_name}:")
+                for pos, word, score in results[:5]:  # Show top 5
+                    print(f"Match: '{word}' at position {pos} (similarity: {score}%)")
+                count += 1
+    
+    if count == 0:
+        print("Tidak ada hasil ditemukan dengan algoritma yang dipilih.")
+    
+    print(f"\nTotal waktu pencarian: {total_time:.2f} ms")
+    if count > 0:
+        print(f"Rata-rata waktu per file: {total_time/count:.2f} ms")
 
 def main():
-    # Get base data directory path
-    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    pdf_dir = os.path.join(base_dir, "data", "pdf")
+    print("=== Resume Search System ===")
+    print("1. Database Search (Recommended)")
+    print("2. String Matching Demo")
+    print("3. Setup Database")
+    print("4. Exit")
     
-    # Create data directories if they don't exist
-    os.makedirs(pdf_dir, exist_ok=True)
-    os.makedirs(os.path.join(base_dir, "data", "string"), exist_ok=True)
-    os.makedirs(os.path.join(base_dir, "data", "regex"), exist_ok=True)
-    
-    # Get all PDF files recursively
-    pdf_files = get_all_pdf_files(pdf_dir)
-    
-    if not pdf_files:
-        print("[ERROR] No PDF files found in data/pdf directory")
-        return
-
-    # Process each PDF file
-    processed_files = []
-    for pdf_path in pdf_files:
-        text = extract_text_from_pdf(pdf_path)
-        if text:
-            # Get relative path + filename without extension
-            rel_path = os.path.relpath(pdf_path, pdf_dir)
-            rel_path_no_ext = os.path.splitext(rel_path)[0]
-            processed_files.append(rel_path_no_ext)
-
-    # String matching demo
-    if processed_files:
-        print("=== String Matching Demo ===")
-        pattern = input("Masukkan kata yang ingin dicari:\n> ")
-        method = int(input("Pilih metode (1: KMP, 2: Boyer-Moore, 3: Aho-Corasick):\n> "))
-        much = int(input("Jumlah hasil yang ingin ditampilkan:\n> "))
-        count = 0
-        total_time = 0  # Track total search time
+    while True:
+        choice = input("\nPilih opsi (1-4): ")
         
-        for rel_path in processed_files:
-            if count >= much:
-                break
-            string_path = os.path.join(base_dir, "data", "string", f"{rel_path}_string.txt")
-            string_text = read_file(string_path)
-            if string_text:
-                # Cari menggunakan KMP
-                if method == 1:
-                    start_time = time.time()
-                    kmp_results = kmp_search(string_text, pattern)
-                    search_time = (time.time() - start_time) * 1000  # Convert to milliseconds
-                    total_time += search_time
-                    
-                    if len(kmp_results) != 0:
-                        print(f"\nKMP Search results in {rel_path}:")
-                        print(f"Pattern ditemukan di posisi: {kmp_results}")
-                        print(f"Total kemunculan: {len(kmp_results)}")
-                        count += 1
-
-                # Cari menggunakan Boyer-Moore
-                elif method == 2:
-                    start_time = time.time()
-                    bm_results = bm_search(string_text, pattern)
-                    search_time = (time.time() - start_time) * 1000
-                    total_time += search_time
-                    
-                    if len(bm_results) != 0:
-                        print(f"\nBoyer-Moore Search results in {rel_path}:")
-                        print(f"Pattern ditemukan di posisi: {bm_results}")
-                        print(f"Total kemunculan: {len(bm_results)}")
-                        count += 1
-                        
-                elif method == 3:  
-                    start_time = time.time()
-                    patterns = pattern.split(',')
-                    patterns = [p.strip() for p in patterns]
-                    ac_results = ac_search(string_text, patterns)
-                    search_time = (time.time() - start_time) * 1000
-                    total_time += search_time
-                    
-                    if ac_results:
-                        print(f"\nAho-Corasick Search results in {rel_path}:")
-                        # Group results by pattern
-                        pattern_results = {}
-                        for pos, pat in ac_results:
-                            if pat not in pattern_results:
-                                pattern_results[pat] = []
-                            pattern_results[pat].append(pos)
-                        
-                        # Print results for each pattern
-                        for pattern, positions in pattern_results.items():
-                            print(f"Pattern '{pattern}' ditemukan di posisi: {positions}")
-                        print(f"Total kemunculan: {len(ac_results)}")
-                        count += 1
-                
-        if count == 0:
-            fuzzy = input("Kata tidak ditemukan, apakah kamu ingin menggunakan fuzzy search? (y/n)\n> ")
-            if fuzzy.lower() == "y":
-                fuzzy_count = 0
-                for rel_path in processed_files:
-                    if fuzzy_count >= much:
-                        break
-                    string_path = os.path.join(base_dir, "data", "string", f"{rel_path}_string.txt")
-                    string_text = read_file(string_path)
-                    if string_text:
-                        start_time = time.time()
-                        fuzzy_results = fuzzy_search(string_text, pattern)
-                        search_time = (time.time() - start_time) * 1000
-                        total_time += search_time
-                        
-                        if fuzzy_results:
-                            print(f"\nFuzzy Search results in {rel_path}:")
-                            for pos, word, score in fuzzy_results:
-                                print(f"Match: '{word}' at position {pos} (similarity: {score}%)")
-                            fuzzy_count += 1
-                if fuzzy_count == 0:
-                    print("Tidak ditemukan hasil dengan fuzzy search.")
+        if choice == "1":
+            # Database search
+            password = get_mysql_password()
+            db = DatabaseManager(password=password)
+            if db.connect():
+                database_search_demo(db)
+                db.disconnect()
             else:
-                print("Oke selamat tinggal!")
-        
-        # Print total search time at the end
-        print(f"\nTotal waktu pencarian: {total_time:.2f} ms")
-
+                print("Gagal koneksi database. Periksa password atau jalankan setup terlebih dahulu.")
+                # Reset password untuk retry
+                global MYSQL_PASSWORD
+                MYSQL_PASSWORD = None
                 
+        elif choice == "2":
+            # String matching demo
+            string_matching_demo()
+            
+        elif choice == "3":
+            # Setup database
+            print("Running database setup...")
+            os.system("python setup_database.py")
+            
+        elif choice == "4":
+            print("Terima kasih!")
+            break
+            
+        else:
+            print("Pilihan tidak valid!")
+
 if __name__ == "__main__":
     main()

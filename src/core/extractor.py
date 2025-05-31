@@ -2,59 +2,25 @@ import fitz
 import re
 import os
 
-
 def extract_text_from_pdf(pdf_path: str) -> str:
+    """Extract text from PDF file using PyMuPDF"""
     text = ""
     try:
-        base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        doc = fitz.open(pdf_path)
+        for page_num in range(len(doc)):
+            page = doc.load_page(page_num)
+            text += page.get_text()
+        doc.close()
         
-        # Get relative path structure from pdf_dir
-        pdf_dir = os.path.join(base_dir, "data", "pdf")
-        rel_path = os.path.relpath(os.path.dirname(pdf_path), pdf_dir)
+        text = text.replace('\n\n', '\n').strip()
         
-        # Get filename without extension
-        filename = os.path.splitext(os.path.basename(pdf_path))[0]
-        
-        # Setup paths
-        regex_dir = os.path.join(base_dir, "data", "regex", rel_path)
-        string_dir = os.path.join(base_dir, "data", "string", rel_path)
-        regex_path = os.path.join(regex_dir, f"{filename}_regex.txt")
-        string_path = os.path.join(string_dir, f"{filename}_string.txt")
-        
-        # Check if both files already exist
-        if os.path.exists(regex_path) and os.path.exists(string_path):
-            # Read existing regex file for text content
-            with open(regex_path, "r", encoding="utf-8") as f:
-                return f.read()
-        
-        # If files don't exist, process the PDF
-        with fitz.open(pdf_path) as doc:
-            for page in doc:
-                text += page.get_text()
-
-        # Create directories if needed
-        os.makedirs(regex_dir, exist_ok=True)
-        os.makedirs(string_dir, exist_ok=True)
-
-        # Save regex version
-        with open(regex_path, "w", encoding="utf-8") as f:
-            f.write(text)
-
-        # Save string matching version
-        clean_text = " ".join(text.split())
-        with open(string_path, "w", encoding="utf-8") as f:
-            f.write(clean_text)
-
-        print(f"[INFO] Created new files for {filename}")
-        print(f"[INFO] Regex file: {regex_path}")
-        print(f"[INFO] String file: {string_path}")
-
     except Exception as e:
-        print(f"[ERROR] Error processing PDF {pdf_path}: {e}")
+        print(f"Error extracting text from {pdf_path}: {e}")
     
     return text
 
 def extract_profile_data(text: str) -> dict:
+    """Extract structured profile data from resume text"""
     profile = {
         "overview": None,
         "skills": [],
@@ -65,118 +31,173 @@ def extract_profile_data(text: str) -> dict:
         "achievements": [],
     }
 
-    # Overview
-    overview_pattern = r"(?i)(PROFILE|SUMMARY|OVERVIEW|ABOUT|OBJECTIVE)[^\n]*\n+(.*?)(?=\n\s*(EDUCATION|EXPERIENCE|SKILLS|WORK|EMPLOYMENT|TRAINING)|\Z)"
-    overview_match = re.search(overview_pattern, text, re.DOTALL)
-    if overview_match:
-        overview_text = " ".join(
-            line.strip() for line in overview_match.group(2).splitlines()
-        )
-        profile["overview"] = overview_text.strip()
+    try:
+        # summary
+        overview_pattern = r"(?i)(PROFILE|SUMMARY|OVERVIEW|ABOUT|OBJECTIVE)[^\n]*\n+(.*?)(?=\n\s*(EDUCATION|EXPERIENCE|SKILLS|WORK|EMPLOYMENT|TRAINING)|\Z)"
+        overview_match = re.search(overview_pattern, text, re.DOTALL)
+        if overview_match:
+            profile["overview"] = overview_match.group(2).strip()
 
-    # Skills
-    skills_pattern = r"(?i)^skills\s*\n(.*?)(?=\n\s*(?:accomplishments|certifications|education|experience|work|employment|training)|\Z)"
-    skills_match = re.search(
-        skills_pattern, text, re.IGNORECASE | re.DOTALL | re.MULTILINE
-    )
-    if skills_match:
-        skills = re.split(r"[,•\n\-]|\s{2,}", skills_match.group(1))
-        profile["skills"] = [
-            skill.strip() for skill in skills if len(skill.strip()) > 1
+        # skills
+        skills_patterns = [
+            r"(?i)(?:SKILLS|TECHNICAL SKILLS|CORE COMPETENCIES)[^\n]*\n(.*?)(?=\n\s*(?:ACCOMPLISHMENTS|CERTIFICATIONS|EDUCATION|EXPERIENCE|WORK|EMPLOYMENT|TRAINING)|\Z)",
+            r"(?i)(?:PROGRAMMING LANGUAGES?|TECHNOLOGIES?)[^\n]*\n(.*?)(?=\n\s*(?:ACCOMPLISHMENTS|CERTIFICATIONS|EDUCATION|EXPERIENCE|WORK)|\Z)"
         ]
+        
+        for pattern in skills_patterns:
+            try:
+                skills_match = re.search(pattern, text, re.IGNORECASE | re.DOTALL | re.MULTILINE)
+                if skills_match:
+                    skills_text = skills_match.group(1)
+                    skills_list = re.split(r'[,\n•·▪▫\-\|]', skills_text)
+                    skills = [skill.strip() for skill in skills_list if skill.strip() and len(skill.strip()) > 1]
+                    profile["skills"].extend(skills)
+                    break
+            except Exception as e:
+                print(f"Error in skills extraction: {e}")
+                continue
 
-    # Experience (support "Title MM/YYYY to MM/YYYY" pattern)
-    experience_matches = re.finditer(
-        r"(?i)(.*?)\s+(\d{2}/\d{4})\s+to\s+(\d{2}/\d{4})\n(.*?)(?=\n\S.*?\d{2}/\d{4}\s+to|\Z)",
-        text,
-        re.DOTALL,
-    )
-    for match in experience_matches:
-        job_title = match.group(1).strip()
-        start = match.group(2)
-        end = match.group(3)
-        description = " ".join(match.group(4).splitlines()).strip()
-        profile["experience"].append(
-            {"title": job_title, "start": start, "end": end, "description": description}
-        )
-
-    # Education (line contains degree, field, and date)
-    edu_pattern = r"(?i)(Bachelor|Associate|Master|Ph\.?D)[^:\n]*[:\s]+(.+?)\s+(May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)?\s*(\d{4})"
-    edu_matches = re.finditer(edu_pattern, text)
-    for match in edu_matches:
-        profile["education"].append(
-            {
-                "degree": match.group(1),
-                "field": match.group(2).strip(),
-                "date": f"{match.group(3)} {match.group(4)}".strip(),
-            }
-        )
-
-    # GPA
-    gpa_matches = re.findall(r"GPA[-:]?\s*(\d\.\d+)", text)
-    profile["gpa"] = gpa_matches
-
-    # Certifications
-    cert_match = re.search(
-        r"(?i)^certifications\s*\n(.*?)(?=\n\s*(skills|experience|education|accomplishments)|\Z)",
-        text,
-        re.IGNORECASE | re.DOTALL | re.MULTILINE,
-    )
-    if cert_match:
-        certs = re.split(r"[,•\n\-]|\s{2,}", cert_match.group(1))
-        profile["certifications"] = [c.strip() for c in certs if len(c.strip()) > 2]
-
-    # Achievements / Accomplishments
-    achievements_match = re.search(
-        r"(?i)^accomplishments\s*\n(.*?)(?=\n\s*(skills|experience|education|certifications)|\Z)",
-        text,
-        re.IGNORECASE | re.DOTALL | re.MULTILINE,
-    )
-    if achievements_match:
-        items = [
-            line.strip()
-            for line in achievements_match.group(1).splitlines()
-            if line.strip()
+        # common skill
+        common_skills = [
+            'Python', 'Java', 'JavaScript', 'C++', 'C#', 'SQL', 'HTML', 'CSS', 'React', 'Angular',
+            'Node.js', 'Machine Learning', 'Data Analysis', 'Project Management', 'Leadership',
+            'Communication', 'Problem Solving', 'Teamwork', 'Git', 'AWS', 'Docker', 'Kubernetes',
+            'Excel', 'PowerPoint', 'Word', 'Accounting', 'Finance', 'Budgeting', 'Auditing'
         ]
-        profile["achievements"] = [i.strip() for i in items if len(i.strip()) > 2]
+        
+        for skill in common_skills:
+            try:
+                if re.search(r'\b' + re.escape(skill) + r'\b', text, re.IGNORECASE):
+                    if skill not in profile["skills"]:
+                        profile["skills"].append(skill)
+            except Exception as e:
+                continue
 
+        # exp
+        exp_patterns = [
+            r"(?i)([A-Z][^0-9\n]*)\s+(\d{4})\s*[-–]\s*(\d{4}|present|current)",
+            r"(?i)([A-Z][^0-9\n]*)\s+(\d{1,2}[/\-]\d{4})\s*[-–]\s*(\d{1,2}[/\-]\d{4}|present|current)"
+        ]
+        
+        for pattern in exp_patterns:
+            try:
+                experience_matches = re.finditer(pattern, text)
+                for match in experience_matches:
+                    if len(match.groups()) >= 3:
+                        exp_entry = {
+                            "title": match.group(1).strip(),
+                            "start": match.group(2).strip(),
+                            "end": match.group(3).strip(),
+                            "description": ""
+                        }
+                        profile["experience"].append(exp_entry)
+            except Exception as e:
+                print(f"Error in experience extraction: {e}")
+                continue
+
+        # edu
+        edu_patterns = [
+            r"(?i)(Bachelor|Associate|Master|Ph\.?D|B\.?S\.?|M\.?S\.?|B\.?A\.?|M\.?A\.?)\s*(?:of|in)?\s*([^,\n]+)",
+            r"(?i)(Bachelor|Master|PhD)\s+([^,\n]+)"
+        ]
+        
+        for pattern in edu_patterns:
+            try:
+                edu_matches = re.finditer(pattern, text)
+                for match in edu_matches:
+                    if len(match.groups()) >= 2:
+                        edu_entry = {
+                            "degree": match.group(1).strip(),
+                            "field": match.group(2).strip(),
+                            "date": ""
+                        }
+                        profile["education"].append(edu_entry)
+            except Exception as e:
+                print(f"Error in education extraction: {e}")
+                continue
+
+        # gpa
+        gpa_patterns = [
+            r"(?i)(?:GPA|Grade Point Average)[:\s]*(\d+\.?\d*)",
+            r"(\d+\.\d+)\s*/\s*4\.0"
+        ]
+        
+        for pattern in gpa_patterns:
+            try:
+                gpa_matches = re.findall(pattern, text)
+                for gpa in gpa_matches:
+                    try:
+                        gpa_val = float(gpa)
+                        if 0.0 <= gpa_val <= 4.0:  # valid GPA
+                            profile["gpa"].append(str(gpa_val))
+                    except ValueError:
+                        continue
+            except Exception as e:
+                print(f"Error in GPA extraction: {e}")
+                continue
+
+        cert_patterns = [
+            r"(?i)(?:CERTIFICATIONS?|CERTIFICATES?)[^\n]*\n([^0-9]*?)(?=\n\s*(?:[A-Z]{2,}|EDUCATION|EXPERIENCE|SKILLS|\Z))",
+            r"(?i)(Certified\s+[^,\n]+)"
+        ]
+        
+        for pattern in cert_patterns:
+            try:
+                cert_matches = re.findall(pattern, text, re.DOTALL)
+                for cert_text in cert_matches:
+                    if isinstance(cert_text, tuple):
+                        cert_text = cert_text[0] if cert_text else ""
+                    
+                    cert_list = re.split(r'[,\n•·▪▫\-]', cert_text)
+                    certs = [cert.strip() for cert in cert_list if cert.strip() and len(cert.strip()) > 2]
+                    profile["certifications"].extend(certs)
+            except Exception as e:
+                print(f"Error in certifications extraction: {e}")
+                continue
+
+        highlights_pattern = r"(?i)(?:HIGHLIGHTS|ACCOMPLISHMENTS)[^\n]*\n(.*?)(?=\n\s*(?:[A-Z]{2,}|EDUCATION|EXPERIENCE|\Z))"
+        try:
+            highlights_match = re.search(highlights_pattern, text, re.DOTALL)
+            if highlights_match:
+                highlights_text = highlights_match.group(1)
+                highlight_list = re.split(r'[,\n•·▪▫\-]', highlights_text)
+                for highlight in highlight_list:
+                    cleaned = highlight.strip()
+                    if cleaned and len(cleaned) > 5:
+                        profile["skills"].append(cleaned)
+        except Exception as e:
+            print(f"Error in highlights extraction: {e}")
+
+    except Exception as e:
+        print(f"General error in profile extraction: {e}")
+
+    # remove duplikat
+    profile["skills"] = list(set(profile["skills"]))
+    
     return profile
 
-
 def print_profile(profile: dict):
-    """Print profile data in a formatted way with newlines between sections"""
-    print("\n=== EXTRACTED PROFILE DATA ===\n")
-
-    # Overview
-    print("OVERVIEW:")
-    print(f"{profile['overview']}\n")
-
-    # Skills
-    print("SKILLS:")
-    print("• " + "\n• ".join(profile["skills"]) + "\n")
-
-    # Experience
-    print("EXPERIENCE:")
-    for exp in profile["experience"]:
-        print(f"• {exp['start']} to {exp['end']}")
-        print(f"  {exp['description']}")
-    print()
-
-    # Education
-    print("EDUCATION:")
-    for edu in profile["education"]:
-        print(f"• {edu['degree']} in {edu['field']}")
-        print(f"  Graduated: {edu['date']}")
-    print()
-
-    # GPA
-    print("GPA:")
-    print("• " + "\n• ".join(profile["gpa"]) + "\n")
-
-    # Certifications
-    print("CERTIFICATIONS:")
-    print("• " + "\n• ".join(profile["certifications"]) + "\n")
-
-    # Achievements
-    print("ACHIEVEMENTS:")
-    print("• " + "\n• ".join(profile["achievements"]) + "\n")
+    """Print formatted profile data"""
+    print("=== EXTRACTED PROFILE DATA ===")
+    
+    if profile.get("overview"):
+        print(f"Overview: {profile['overview'][:100]}...")
+    
+    if profile.get("skills"):
+        print(f"Skills ({len(profile['skills'])}): {', '.join(profile['skills'][:10])}...")
+    
+    if profile.get("experience"):
+        print(f"Experience ({len(profile['experience'])} entries):")
+        for exp in profile['experience'][:3]:
+            print(f"  - {exp.get('title', 'N/A')} ({exp.get('start', '')} - {exp.get('end', '')})")
+    
+    if profile.get("education"):
+        print(f"Education ({len(profile['education'])} entries):")
+        for edu in profile['education']:
+            print(f"  - {edu.get('degree', '')} in {edu.get('field', '')}")
+    
+    if profile.get("gpa"):
+        print(f"GPA: {profile['gpa'][0]}")
+    
+    if profile.get("certifications"):
+        print(f"Certifications ({len(profile['certifications'])}): {', '.join(profile['certifications'][:3])}...")
