@@ -40,7 +40,7 @@ def database_search_demo(db: DatabaseManager):
         search_time = (time.time() - start_time) * 1000
         
         print(f"\nDitemukan {len(results)} hasil dalam {search_time:.2f} ms:")
-        for i, resume in enumerate(results[:5], 1):
+        for i, resume in enumerate(results, 1):
             print(f"{i}. {resume['filename']} ({resume['category']})")
             if resume.get('relevance_score', 0) > 0:
                 print(f"   Relevance: {resume['relevance_score']:.2f}")
@@ -57,7 +57,7 @@ def database_search_demo(db: DatabaseManager):
                 category = categories[cat_choice]
                 results = db.search_resumes_by_criteria("", category=category)
                 print(f"\nDitemukan {len(results)} resume dalam kategori {category}:")
-                for i, resume in enumerate(results[:10], 1):
+                for i, resume in enumerate(results, 1):
                     print(f"{i}. {resume['filename']}")
         except (ValueError, IndexError):
             print("Pilihan tidak valid")
@@ -66,7 +66,7 @@ def database_search_demo(db: DatabaseManager):
         skill = input("Masukkan skill yang dicari: ")
         results = db.search_resumes_by_criteria("", skill_filter=skill)
         print(f"\nDitemukan {len(results)} resume dengan skill '{skill}':")
-        for i, resume in enumerate(results[:5], 1):
+        for i, resume in enumerate(results, 1):
             print(f"{i}. {resume['filename']} ({resume['category']})")
     
     elif choice == "4":
@@ -80,7 +80,7 @@ def database_search_demo(db: DatabaseManager):
             skill_filter=skill, experience_filter=experience
         )
         print(f"\nDitemukan {len(results)} hasil:")
-        for i, resume in enumerate(results[:5], 1):
+        for i, resume in enumerate(results, 1):
             print(f"{i}. {resume['filename']} ({resume['category']})")
     
     elif choice == "5":
@@ -90,7 +90,7 @@ def database_search_demo(db: DatabaseManager):
         print(f"Total searches: {stats.get('total_searches', 0)}")
         
         print(f"\nResumes by category:")
-        for cat_stat in stats.get('resumes_by_category', [])[:10]:
+        for cat_stat in stats.get('resumes_by_category', []):
             print(f"  {cat_stat['category']}: {cat_stat['count']}")
 
 def string_matching_demo():
@@ -147,7 +147,7 @@ def string_matching_demo():
             
             if results:
                 print(f"\nKMP Search results in {display_name}:")
-                print(f"Pattern ditemukan di posisi: {results[:10]}")  # Show first 10
+                print(f"Pattern ditemukan di posisi: {results}")
                 print(f"Total kemunculan: {len(results)}")
                 count += 1
                 
@@ -159,7 +159,7 @@ def string_matching_demo():
             
             if results:
                 print(f"\nBoyer-Moore Search results in {display_name}:")
-                print(f"Pattern ditemukan di posisi: {results[:10]}")
+                print(f"Pattern ditemukan di posisi: {results}")
                 print(f"Total kemunculan: {len(results)}")
                 count += 1
                 
@@ -181,7 +181,7 @@ def string_matching_demo():
                     pattern_results[pat].append(pos)
                 
                 for pat, positions in pattern_results.items():
-                    print(f"Pattern '{pat}' ditemukan di posisi: {positions[:5]}")  # Show first 5
+                    print(f"Pattern '{pat}' ditemukan di posisi: {positions}")
                 print(f"Total kemunculan: {len(results)}")
                 count += 1
                 
@@ -193,7 +193,7 @@ def string_matching_demo():
             
             if results:
                 print(f"\nFuzzy Search results in {display_name}:")
-                for pos, word, score in results[:5]:  # Show top 5
+                for pos, word, score in results:
                     print(f"Match: '{word}' at position {pos} (similarity: {score}%)")
                 count += 1
     

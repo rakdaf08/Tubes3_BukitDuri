@@ -120,21 +120,20 @@ class DatabaseManager:
             return -1
     
     def search_resumes_by_criteria(self, search_text: str, category: str = None, 
-                                 skill_filter: str = None, experience_filter: str = None) -> List[Dict]:
+                                skill_filter: str = None, experience_filter: str = None) -> List[Dict]:
         """Enhanced search with multiple criteria"""
         try:
-            cursor = self.connection.cursor(dictionary=True)
-            
+            cursor = self.connection.cursor(dictionary=True)            
             conditions = []
             values = []
             
             if search_text:
                 conditions.append("""
                     (extracted_text LIKE %s OR 
-                     skills LIKE %s OR 
-                     experience LIKE %s OR 
-                     education LIKE %s OR
-                     filename LIKE %s)
+                    skills LIKE %s OR 
+                    experience LIKE %s OR 
+                    education LIKE %s OR
+                    filename LIKE %s)
                 """)
                 search_pattern = f"%{search_text}%"
                 values.extend([search_pattern] * 5)
@@ -160,7 +159,6 @@ class DatabaseManager:
                 FROM resumes 
                 WHERE {where_clause}
                 ORDER BY relevance_score DESC, created_at DESC
-                LIMIT 50
             """
             
             final_values = [search_text or ""] + values
@@ -173,7 +171,7 @@ class DatabaseManager:
         except mysql.connector.Error as err:
             print(f"Error searching resumes: {err}")
             return []
-    
+        
     def get_resume_by_id(self, resume_id: int) -> Optional[Dict]:
         """Get specific resume by ID"""
         try:
