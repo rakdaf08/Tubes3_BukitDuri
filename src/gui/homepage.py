@@ -4,8 +4,9 @@ from PyQt5.QtGui import QFont, QCursor, QIcon
 from PyQt5.QtCore import Qt, QSize
 
 class CVCard(QWidget):
-    def __init__(self, name, matches, skills):
+    def __init__(self, name, matches, skills, resume_id=None):
         super().__init__()
+        self.resume_id = resume_id
         self.setFixedSize(350, 300)
         self.setStyleSheet("background-color: #1a1a1a;") 
 
@@ -52,6 +53,8 @@ class CVCard(QWidget):
 
         view_more = QPushButton("View More")
         view_cv = QPushButton("View CV")
+        view_more.clicked.connect(self.view_more_clicked)
+        view_cv.clicked.connect(self.view_cv_clicked)
 
         for btn in (view_more, view_cv):
             btn.setCursor(QCursor(Qt.PointingHandCursor))
@@ -79,6 +82,20 @@ class CVCard(QWidget):
         outer_layout = QVBoxLayout()
         outer_layout.addWidget(card_frame)
         self.setLayout(outer_layout)
+    
+    def view_more_clicked(self):
+        # Show summary page with resume data
+        from summary import IntegratedSummaryPage
+        self.summary_page = IntegratedSummaryPage(self.get_resume_data())
+        self.summary_page.show()
+
+    def view_cv_clicked(self):
+        # Open PDF viewer or show CV content
+        QMessageBox.information(self, "CV Viewer", f"Opening CV for {self.name}")
+
+    def get_resume_data(self):
+        # Fetch full resume data from database using self.resume_id
+        return {'name': self.name, 'skills': self.skills}
 
 
 
@@ -194,36 +211,60 @@ class SearchApp(QWidget):
         self.pagination_layout = QHBoxLayout()
         self.pagination_layout.setAlignment(Qt.AlignCenter)
 
-        self.prev_btn = QPushButton("Previous")
-        self.next_btn = QPushButton("Next")
+        self.prev_btn = QPushButton("◀")
+        self.prev_btn.setFixedSize(40, 40)
+        self.prev_btn.setCursor(QCursor(Qt.PointingHandCursor))
+        self.prev_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #00FFC6;
+                border: none;
+                border-radius: 20px;
+                color: black;
+                font-weight: bold;
+                font-size: 16px;
+            }
+            QPushButton:hover {
+                background-color: #00E6B8;
+            }
+            QPushButton:disabled {
+                background-color: #5A6563;
+                color: #888;
+            }
+        """)
 
-        for btn in (self.prev_btn, self.next_btn):
-            btn.setCursor(QCursor(Qt.PointingHandCursor))
-            btn.setStyleSheet("""
-                QPushButton {
-                    background-color: #00FFC6;
-                    border: none;
-                    border-radius: 8px;
-                    padding: 6px 12px;
-                    color: black;
-                    font-weight: bold;
-                }
-                QPushButton:hover {
-                    background-color: #00E6B8;
-                }
-            """)
+        self.page_label = QLabel()
+        self.page_label.setStyleSheet("color: white; font-size: 14px; margin: 0 15px;")
+        self.page_label.setAlignment(Qt.AlignCenter)
+
+        self.next_btn = QPushButton("▶")
+        self.next_btn.setFixedSize(40, 40)
+        self.next_btn.setCursor(QCursor(Qt.PointingHandCursor))
+        self.next_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #00FFC6;
+                border: none;
+                border-radius: 20px;
+                color: black;
+                font-weight: bold;
+                font-size: 16px;
+            }
+            QPushButton:hover {
+                background-color: #00E6B8;
+            }
+            QPushButton:disabled {
+                background-color: #5A6563;
+                color: #888;
+            }
+        """)
 
         self.prev_btn.clicked.connect(self.goToPrevPage)
         self.next_btn.clicked.connect(self.goToNextPage)
 
-        self.page_buttons_container = QHBoxLayout() 
-
         self.pagination_layout.addWidget(self.prev_btn)
-        self.pagination_layout.addLayout(self.page_buttons_container)
+        self.pagination_layout.addWidget(self.page_label)
         self.pagination_layout.addWidget(self.next_btn)
 
         self.main_layout.addLayout(self.pagination_layout)
-
 
     def updateCards(self):
         # Bersihkan grid
@@ -240,36 +281,12 @@ class SearchApp(QWidget):
             card = CVCard(name, matches, skills)
             self.grid.addWidget(card, i // 3, i % 3)
 
-        # Update tombol previous/next
+        # Update pagination
+        total_pages = (len(self.cv_data) - 1) // self.items_per_page + 1
+        self.page_label.setText(f"Page {self.current_page + 1} of {total_pages}")
+        
         self.prev_btn.setEnabled(self.current_page > 0)
         self.next_btn.setEnabled(end < len(self.cv_data))
-
-        # Update tombol nomor halaman
-        while self.page_buttons_container.count():
-            item = self.page_buttons_container.takeAt(0)
-            if item.widget():
-                item.widget().deleteLater()
-
-        total_pages = (len(self.cv_data) - 1) // self.items_per_page + 1
-        for i in range(total_pages):
-            btn = QPushButton(str(i + 1))
-            btn.setCursor(QCursor(Qt.PointingHandCursor))
-            btn.setFixedWidth(32)
-            btn.setStyleSheet(f"""
-                QPushButton {{
-                    background-color: {'#00FFC6' if i == self.current_page else '#5A6563'};
-                    border: none;
-                    border-radius: 6px;
-                    padding: 4px;
-                    color: {'black' if i == self.current_page else 'white'};
-                    font-weight: bold;
-                }}
-                QPushButton:hover {{
-                    background-color: {'#00E6B8' if i != self.current_page else '#00FFC6'};
-                }}
-            """)
-            btn.clicked.connect(lambda _, x=i: self.goToPage(x))
-            self.page_buttons_container.addWidget(btn)
 
     def goToPage(self, page):
         if 0 <= page < (len(self.cv_data) - 1) // self.items_per_page + 1:

@@ -1,0 +1,345 @@
+import sys
+import os
+import getpass
+from PyQt5.QtWidgets import *
+from PyQt5.QtGui import QFont, QCursor, QIcon, QFontDatabase
+from PyQt5.QtCore import Qt, QSize, QThread, pyqtSignal
+
+# Import your existing GUI classes
+from gui.landing import BukitDuriApp
+from gui.homepage import SearchApp, CVCard
+from gui.summary import SummaryPage
+
+# Import core functionality
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from core.extractor import extract_text_from_pdf, extract_profile_data
+from core.matcher import kmp_search, bm_search, ac_search, fuzzy_search
+from db.db_connector import DatabaseManager
+
+class SearchWorker(QThread):
+    """Worker thread for search operations"""
+    results_ready = pyqtSignal(list)
+    error_occurred = pyqtSignal(str)
+    
+    def __init__(self, keywords, method, top_matches, db_password):
+        super().__init__()
+        self.keywords = keywords
+        self.method = method
+        self.top_matches = top_matches
+        self.db_password = db_password
+    
+    def run(self):
+        try:
+            # Connect to database
+            db = DatabaseManager(password=self.db_password)
+            if not db.connect():
+                self.error_occurred.emit("Failed to connect to database")
+                return
+            
+            # Perform search based on method
+            if self.method == "KMP":
+                results = self.search_with_kmp(db)
+            elif self.method == "BM":
+                results = self.search_with_bm(db)
+            elif self.method == "AC":
+                results = self.search_with_ac(db)
+            else:
+                results = []
+            
+            # Limit results to top matches
+            results = results[:self.top_matches]
+            
+            self.results_ready.emit(results)
+            db.disconnect()
+            
+        except Exception as e:
+            self.error_occurred.emit(str(e))
+    
+    def search_with_kmp(self, db):
+        # Get all resumes from database
+        all_resumes = db.get_all_resumes()
+        results = []
+        
+        keywords = [k.strip() for k in self.keywords.split(',')]
+        
+        for resume in all_resumes:
+            total_matches = 0
+            skill_matches = {}
+            
+            # Search in resume text
+            for keyword in keywords:
+                matches = kmp_search(resume['content'], keyword)
+                if matches:
+                    total_matches += len(matches)
+                    skill_matches[keyword] = len(matches)
+            
+            if total_matches > 0:
+                results.append({
+                    'name': resume['filename'].replace('.pdf', ''),
+                    'matches': total_matches,
+                    'skills': skill_matches,
+                    'resume_id': resume['id']
+                })
+        
+        return sorted(results, key=lambda x: x['matches'], reverse=True)
+    
+    def search_with_bm(self, db):
+        # Similar to KMP but using Boyer-Moore
+        all_resumes = db.get_all_resumes()
+        results = []
+        
+        keywords = [k.strip() for k in self.keywords.split(',')]
+        
+        for resume in all_resumes:
+            total_matches = 0
+            skill_matches = {}
+            
+            for keyword in keywords:
+                matches = bm_search(resume['content'], keyword)
+                if matches:
+                    total_matches += len(matches)
+                    skill_matches[keyword] = len(matches)
+            
+            if total_matches > 0:
+                results.append({
+                    'name': resume['filename'].replace('.pdf', ''),
+                    'matches': total_matches,
+                    'skills': skill_matches,
+                    'resume_id': resume['id']
+                })
+        
+        return sorted(results, key=lambda x: x['matches'], reverse=True)
+    
+    def search_with_ac(self, db):
+        # Using Aho-Corasick for multiple pattern matching
+        all_resumes = db.get_all_resumes()
+        results = []
+        
+        keywords = [k.strip() for k in self.keywords.split(',')]
+        
+        for resume in all_resumes:
+            matches = ac_search(resume['content'], keywords)
+            if matches:
+                total_matches = len(matches)
+                skill_matches = {}
+                
+                for _, pattern in matches:
+                    if pattern in skill_matches:
+                        skill_matches[pattern] += 1
+                    else:
+                        skill_matches[pattern] = 1
+                
+                results.append({
+                    'name': resume['filename'].replace('.pdf', ''),
+                    'matches': total_matches,
+                    'skills': skill_matches,
+                    'resume_id': resume['id']
+                })
+        
+        return sorted(results, key=lambda x: x['matches'], reverse=True)
+
+class IntegratedLandingPage(BukitDuriApp):
+    """Enhanced landing page with search functionality"""
+    
+    def __init__(self):
+        super().__init__()
+        self.db_password = None
+        self.search_worker = None
+        self.results_window = None
+        
+        # Connect search button after UI is initialized
+        self.connect_search_button()
+    
+    def connect_search_button(self):
+        # Find and connect the search button
+        for widget in self.findChildren(QPushButton):
+            if widget.text() == "Search":
+                widget.clicked.connect(self.perform_search)
+                break
+    
+    def perform_search(self):
+        print("Search button clicked!")  # Debug line
+        
+        # Get input values from the form
+        line_edits = self.findChildren(QLineEdit)
+        
+        # First LineEdit should be keywords, second should be top matches
+        keyword_input = line_edits[0] if len(line_edits) > 0 else None
+        top_input = line_edits[1] if len(line_edits) > 1 else None
+        
+        keywords = keyword_input.text().strip() if keyword_input else ""
+        
+        # Get top matches value
+        top_matches_text = top_input.text().strip() if top_input else "3"
+        try:
+            top_matches = int(top_matches_text) if top_matches_text else 3
+        except ValueError:
+            top_matches = 3
+        
+        print(f"Keywords: {keywords}")  # Debug line
+        print(f"Top matches: {top_matches}")  # Debug line
+        
+        # Get selected method
+        method = "KMP"  # Default
+        if self.kmp_btn.isChecked():
+            method = "KMP"
+        elif self.bm_btn.isChecked():
+            method = "BM"
+        elif self.ac_btn.isChecked():
+            method = "AC"
+        else:
+            # If no method is selected, default to KMP and select it
+            self.kmp_btn.setChecked(True)
+            method = "KMP"
+        
+        print(f"Method: {method}")  # Debug line
+        
+        if not keywords:
+            QMessageBox.warning(self, "Warning", "Please enter keywords to search!")
+            return
+        
+        # Get database password if not set
+        if not self.db_password:
+            password, ok = QInputDialog.getText(self, "Database Password", 
+                                             "Enter MySQL root password:", 
+                                             QLineEdit.Password)
+            if not ok:
+                return
+            self.db_password = password
+        
+        # Show loading dialog
+        self.loading_dialog = QProgressDialog("Searching resumes...", "Cancel", 0, 0, self)
+        self.loading_dialog.setWindowModality(Qt.WindowModal)
+        self.loading_dialog.show()
+        
+        # Start search in worker thread
+        self.search_worker = SearchWorker(keywords, method, top_matches, self.db_password)
+        self.search_worker.results_ready.connect(self.show_results)
+        self.search_worker.error_occurred.connect(self.show_error)
+        self.search_worker.finished.connect(self.search_finished)
+        self.search_worker.start()
+    
+    def show_results(self, results):
+        if hasattr(self, 'loading_dialog'):
+            self.loading_dialog.close()
+        
+        print(f"Search completed! Found {len(results)} results")  # Debug line
+        
+        # Create and show results window
+        self.results_window = IntegratedHomePage(results)
+        self.results_window.show()
+        self.close()
+    
+    def show_error(self, error_msg):
+        if hasattr(self, 'loading_dialog'):
+            self.loading_dialog.close()
+        QMessageBox.critical(self, "Search Error", f"Error occurred during search:\n{error_msg}")
+        print(f"Search error: {error_msg}")  # Debug line
+    
+    def search_finished(self):
+        if hasattr(self, 'loading_dialog'):
+            self.loading_dialog.close()
+        print("Search worker finished")  # Debug line
+
+class IntegratedHomePage(SearchApp):
+    """Enhanced homepage with real search results"""
+    
+    def __init__(self, search_results=None):
+        self.search_results = search_results or []
+        super().__init__()
+        
+        # Update cv_data with search results
+        if self.search_results:
+            self.cv_data = [(result['name'], result['matches'], result['skills']) 
+                           for result in self.search_results]
+        
+        self.updateCards()
+    
+    def setupTopBar(self):
+        # Override to add back button
+        top_layout = QHBoxLayout()
+        top_layout.setAlignment(Qt.AlignLeft)
+        
+        back_btn = QPushButton("← Back to Search")
+        back_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #00FFC6;
+                border-radius: 10px;
+                color: black;
+                font-weight: bold;
+                padding: 8px 16px;
+            }
+            QPushButton:hover {
+                background-color: #00E6B8;
+            }
+        """)
+        back_btn.clicked.connect(self.go_back_to_search)
+        
+        top_layout.addWidget(back_btn)
+        top_layout.addStretch()
+        
+        # Add results count
+        results_label = QLabel(f"Found {len(self.cv_data)} matching resumes")
+        results_label.setStyleSheet("color: white; font-size: 16px; font-weight: bold;")
+        top_layout.addWidget(results_label)
+        
+        self.main_layout.addLayout(top_layout)
+    
+    def go_back_to_search(self):
+        self.landing_page = IntegratedLandingPage()
+        self.landing_page.show()
+        self.close()
+
+class IntegratedSummaryPage(SummaryPage):
+    """Enhanced summary page with real resume data"""
+    
+    def __init__(self, resume_data=None):
+        self.resume_data = resume_data
+        super().__init__()
+        
+        if resume_data:
+            self.populate_with_real_data()
+    
+    def populate_with_real_data(self):
+        # Update name
+        name_label = self.findChild(QLabel, "name")
+        if name_label and self.resume_data:
+            name_label.setText(self.resume_data.get('name', 'Unknown'))
+        
+        # Update skills with real data
+        if 'skills' in self.resume_data:
+            # Update the skills list
+            pass  # Implementation depends on your data structure
+
+class MainApplication(QApplication):
+    """Main application controller"""
+    
+    def __init__(self, sys_argv):
+        super().__init__(sys_argv)
+        self.setApplicationName("Bukit Duri CV Analyzer")
+        
+        # Load fonts
+        self.load_fonts()
+        
+        # Show landing page
+        self.landing_page = IntegratedLandingPage()
+        self.landing_page.show()
+    
+    def load_fonts(self):
+        try:
+            font_path = os.path.join(os.path.dirname(__file__), "font/Inter_24pt-Regular.ttf")
+            if os.path.exists(font_path):
+                font_id = QFontDatabase.addApplicationFont(font_path)
+                if font_id != -1:
+                    families = QFontDatabase.applicationFontFamilies(font_id)
+                    self.setFont(QFont(families[0] if families else "Arial", 10))
+        except Exception as e:
+            print(f"Font loading error: {e}")
+            self.setFont(QFont("Arial", 10))
+
+def main():
+    app = MainApplication(sys.argv)
+    sys.exit(app.exec_())
+
+if __name__ == "__main__":
+    main()

@@ -1,7 +1,8 @@
-pymupdf
-mysql-connector-python
-python-Levenshtein
-fuzzywuzzy
+PyQt5==5.15.10
+mysql-connector-python==8.2.0
+python-Levenshtein==0.21.1
+PyMuPDF==1.23.14
+fuzzywuzzy==0.18.0
 PyPDF2
 pandas>=1.5.0
 numpy>=1.21.0
