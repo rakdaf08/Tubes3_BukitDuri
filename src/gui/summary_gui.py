@@ -7,12 +7,15 @@ from PyQt5.QtGui import QFont
 from PyQt5.QtCore import Qt, QSize
 
 class SummaryPage(QWidget):
-    def __init__(self):
+    def __init__(self, resume_data=None):
         super().__init__()
+        self.resume_data = resume_data or {}
         self.setWindowTitle("Summary Page")
         self.setFixedSize(1280, 720)
         self.setStyleSheet("background-color: #0B1917; color: white;")
+        self.init_ui()
 
+    def init_ui(self): 
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         outer_layout = QVBoxLayout(self)
@@ -31,7 +34,8 @@ class SummaryPage(QWidget):
         header.addStretch()
         layout.addLayout(header)
 
-        name = QLabel("Raka Daffa Iftikhaar")
+        name_text = self.resume_data.get('name', 'Unknown Candidate')
+        name = QLabel(name_text)
         name.setFont(QFont("Arial", 48, QFont.Bold))
         name.setStyleSheet("color: #00FFC6;")
         name.setAlignment(Qt.AlignCenter)
@@ -83,7 +87,11 @@ class SummaryPage(QWidget):
         skills_layout_wrapper.addWidget(skills_title)
 
         # Sample skills data (replace with your actual skills list)
-        all_skills = ["HTML", "CSS", "JavaScript", "Python", "React", "Node.js", "SQL", "Git", "Docker", "AWS", "MongoDB", "Vue.js"]
+        skills_from_db = self.resume_data.get('skills', [])
+        if isinstance(skills_from_db, str):
+            all_skills = [s.strip() for s in skills_from_db.split(',') if s.strip()]
+        else:
+            all_skills = skills_from_db
         skills_per_page = 9
         self.current_page = 0  # Use self to make it accessible
         total_pages = (len(all_skills) + skills_per_page - 1) // skills_per_page
