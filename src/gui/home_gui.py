@@ -1,4 +1,11 @@
 import sys
+import subprocess
+import platform
+import os
+
+            
+from gui.summary_gui import SummaryPage
+from src.db.db_connector import DatabaseManager
 from PyQt5.QtWidgets import *
 from PyQt5.QtGui import QFont, QCursor, QIcon
 from PyQt5.QtCore import Qt, QSize
@@ -84,18 +91,73 @@ class CVCard(QWidget):
         self.setLayout(outer_layout)
     
     def view_more_clicked(self):
-        # Show summary page with resume data
-        from summary import IntegratedSummaryPage
-        self.summary_page = IntegratedSummaryPage(self.get_resume_data())
-        self.summary_page.show()
+        try:
+            current_dir = os.path.dirname(os.path.abspath(__file__))
+            sys.path.append(current_dir)
+            
+            # Get real resume data
+            db = DatabaseManager(password="")
+            if db.connect():
+                resume = db.get_resume_by_id(self.resume_id)
+                if resume:
+                    resume_data = {
+                        'name': resume['filename'].replace('.pdf', ''),
+                        'skills': resume['skills'].split(', ') if resume['skills'] else [],
+                        'experience': resume['experience'],
+                        'education': resume['education'],
+                        'gpa': resume['gpa'],
+                        'certifications': resume['certifications'],
+                        'resume_id': self.resume_id,
+                        'file_path': resume['file_path']
+                    }
+                    
+                    self.summary_page = SummaryPage(resume_data)
+                    self.summary_page.show()
+                else:
+                    QMessageBox.information(self, "Error", "Resume data not found")
+                db.disconnect()
+            else:
+                QMessageBox.critical(self, "Database Error", "Could not connect to database")
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Could not open summary: {str(e)}")
 
     def view_cv_clicked(self):
-        # Open PDF viewer or show CV content
-        QMessageBox.information(self, "CV Viewer", f"Opening CV for {self.name}")
+        try:
+            # Get resume data from database
+            from src.db.db_connector import DatabaseManager
+            db = DatabaseManager(password="")
+            if db.connect():
+                resume = db.get_resume_by_id(self.resume_id)
+                if resume and resume['file_path']:
+                    file_path = resume['file_path']
+                    
+                    # Check if file exists
+                    if os.path.exists(file_path):
+                        # Open PDF with default system viewer
+                        if platform.system() == 'Darwin':  # macOS
+                            subprocess.run(['open', file_path])
+                        elif platform.system() == 'Windows':
+                            os.startfile(file_path)
+                        else:  # Linux
+                            subprocess.run(['xdg-open', file_path])
+                    else:
+                        QMessageBox.warning(self, "File Not Found", 
+                                        f"PDF file not found:\n{file_path}")
+                else:
+                    QMessageBox.information(self, "No File", "No PDF file associated with this resume")
+                db.disconnect()
+            else:
+                QMessageBox.critical(self, "Database Error", "Could not connect to database")
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Could not open PDF:\n{str(e)}")
 
     def get_resume_data(self):
-        # Fetch full resume data from database using self.resume_id
-        return {'name': self.name, 'skills': self.skills}
+        # Return resume data structure
+        return {
+            'name': getattr(self, 'name', 'Unknown'),
+            'skills': getattr(self, 'skills', {}),
+            'resume_id': self.resume_id
+        }
 
 
 
@@ -128,70 +190,36 @@ class SearchApp(QWidget):
         self.updateCards()
 
     def setupTopBar(self):
+        # Simplified version for base SearchApp
         top_layout = QHBoxLayout()
-        top_layout.setAlignment(Qt.AlignHCenter)
-        top_layout.setSpacing(10)
-
-        self.method_dropdown = QComboBox()
-        self.method_dropdown.addItems(["KMP", "BM", "AC"])
-        self.method_dropdown.setFixedSize(100, 36)
-        self.method_dropdown.setStyleSheet("""
-            QComboBox {
-                background-color: #00FFC6;
-                border-radius: 10px;
-                color: black;
-                font-weight: bold;
-                padding-left: 10px;
-            }
-            QComboBox::drop-down {
-                border: none;
-            }
-            QComboBox QAbstractItemView {
-                background-color: white;
-                color: black;
-            }
-        """)
-
-        self.top_input = QLineEdit("3")
-        self.top_input.setFixedSize(40, 36)
-        self.top_input.setStyleSheet("""
-            QLineEdit {
-                background-color: #5A6563;
-                border-radius: 10px;
-                padding: 0 10px;
-                color: white;
-            }
-        """)
-
-        self.keyword_input = QLineEdit("React, Express, HTML")
-        self.keyword_input.setFixedHeight(36)
-        self.keyword_input.setFixedWidth(400)
-        self.keyword_input.setStyleSheet("""
-            QLineEdit {
-                background-color: #5A6563;
-                border-radius: 10px;
-                padding: 0 10px;
-                color: white;
-            }
-        """)
-
-        self.search_btn = QPushButton()
-        self.search_btn.setFixedSize(36, 36)
-        self.search_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #00FF88;
-                border-radius: 18px;
-            }
-        """)
-        self.search_btn.setIcon(QIcon("assets/search_icon.png")) 
-        self.search_btn.setIconSize(QSize(20, 20))
-
-        top_layout.addWidget(self.method_dropdown)
-        top_layout.addWidget(self.top_input)
-        top_layout.addWidget(self.keyword_input)
-        top_layout.addWidget(self.search_btn)
-
+        
+        title = QLabel("CV Search Results")
+        title.setStyleSheet("color: white; font-size: 24px; font-weight: bold;")
+        top_layout.addWidget(title)
+        top_layout.addStretch()
+        
         self.main_layout.addLayout(top_layout)
+
+    def perform_new_search(self):
+        keywords = self.keyword_input.text().strip()
+        if not keywords:
+            QMessageBox.warning(self, "Warning", "Please enter keywords!")
+            return
+        
+        method = self.method_dropdown.currentText()
+        top_matches = int(self.top_input.text() or "3")
+        
+        # Create search worker without password
+        self.search_worker = SearchWorker(keywords, method, top_matches, "")
+        self.search_worker.results_ready.connect(self.update_search_results)
+        self.search_worker.start()
+
+    def update_search_results(self, results):
+        self.search_results = results
+        self.cv_data = [(result['name'], result['matches'], result['skills']) 
+                    for result in results]
+        self.current_page = 0
+        self.updateCards()
 
     def setupCardArea(self):
         self.scroll = QScrollArea()
@@ -267,7 +295,7 @@ class SearchApp(QWidget):
         self.main_layout.addLayout(self.pagination_layout)
 
     def updateCards(self):
-        # Bersihkan grid
+        # Clear existing widgets
         while self.grid.count():
             child = self.grid.takeAt(0)
             if child.widget():
@@ -277,12 +305,32 @@ class SearchApp(QWidget):
         end = start + self.items_per_page
         current_items = self.cv_data[start:end]
 
-        for i, (name, matches, skills) in enumerate(current_items):
-            card = CVCard(name, matches, skills)
+        for i, item_data in enumerate(current_items):
+            # Handle different data formats
+            if isinstance(item_data, dict):
+                # Format from search results
+                name = item_data.get('name', 'Unknown')
+                matches = item_data.get('matches', 0)
+                skills = item_data.get('skills', {})
+                resume_id = item_data.get('resume_id')
+            elif isinstance(item_data, tuple) and len(item_data) >= 3:
+                # Tuple format (name, matches, skills, resume_id)
+                name = item_data[0]
+                matches = item_data[1]
+                skills = item_data[2]
+                resume_id = item_data[3] if len(item_data) > 3 else None
+            else:
+                # Fallback
+                name = "Unknown"
+                matches = 0
+                skills = {}
+                resume_id = None
+            
+            card = CVCard(name, matches, skills, resume_id)
             self.grid.addWidget(card, i // 3, i % 3)
 
         # Update pagination
-        total_pages = (len(self.cv_data) - 1) // self.items_per_page + 1
+        total_pages = (len(self.cv_data) - 1) // self.items_per_page + 1 if self.cv_data else 1
         self.page_label.setText(f"Page {self.current_page + 1} of {total_pages}")
         
         self.prev_btn.setEnabled(self.current_page > 0)
