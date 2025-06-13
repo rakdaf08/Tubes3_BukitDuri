@@ -5,23 +5,26 @@ from PyQt5.QtWidgets import *
 from PyQt5.QtGui import QFont, QCursor, QIcon, QFontDatabase
 from PyQt5.QtCore import Qt, QSize, QThread, pyqtSignal
 
+# Add current directory to path
+current_dir = os.path.dirname(os.path.abspath(__file__))
+parent_dir = os.path.dirname(current_dir)
+sys.path.append(parent_dir)
+
 # Import your existing GUI classes
-from gui.landing import BukitDuriApp
-from gui.homepage import SearchApp, CVCard
-from gui.summary import SummaryPage
+from gui.landing_gui import BukitDuriApp
+from gui.home_gui import SearchApp, CVCard
+from gui.summary_gui import SummaryPage
 
 # Import core functionality
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from core.extractor import extract_text_from_pdf, extract_profile_data
-from core.matcher import kmp_search, bm_search, ac_search, fuzzy_search
-from db.db_connector import DatabaseManager
+from src.core.extractor import extract_text_from_pdf, extract_profile_data
+from src.core.matcher import kmp_search, bm_search, ac_search, fuzzy_search
+from src.db.db_connector import DatabaseManager
 
 class SearchWorker(QThread):
-    """Worker thread for search operations"""
-    results_ready = pyqtSignal(list)
-    error_occurred = pyqtSignal(str)
+    results_ready = pyqtSignal(list)  # Add this signal
+    error_occurred = pyqtSignal(str)  # Add this signal
     
-    def __init__(self, keywords, method, top_matches, db_password):
+    def __init__(self, keywords, method, top_matches, db_password=""):
         super().__init__()
         self.keywords = keywords
         self.method = method
@@ -30,8 +33,8 @@ class SearchWorker(QThread):
     
     def run(self):
         try:
-            # Connect to database
-            db = DatabaseManager(password=self.db_password)
+            # Connect tanpa password
+            db = DatabaseManager(password="")
             if not db.connect():
                 self.error_occurred.emit("Failed to connect to database")
                 return
@@ -158,23 +161,9 @@ class IntegratedLandingPage(BukitDuriApp):
                 break
     
     def perform_search(self):
-        print("Search button clicked!")  # Debug line
-        
-        # Get input values from the form
         line_edits = self.findChildren(QLineEdit)
-        
-        # First LineEdit should be keywords, second should be top matches
-        keyword_input = line_edits[0] if len(line_edits) > 0 else None
-        top_input = line_edits[1] if len(line_edits) > 1 else None
-        
-        keywords = keyword_input.text().strip() if keyword_input else ""
-        
-        # Get top matches value
-        top_matches_text = top_input.text().strip() if top_input else "3"
-        try:
-            top_matches = int(top_matches_text) if top_matches_text else 3
-        except ValueError:
-            top_matches = 3
+        keywords = line_edits[0].text().strip() if line_edits else ""
+        top_matches = int(line_edits[1].text() or "3") if len(line_edits) > 1 else 3
         
         print(f"Keywords: {keywords}")  # Debug line
         print(f"Top matches: {top_matches}")  # Debug line
@@ -197,15 +186,6 @@ class IntegratedLandingPage(BukitDuriApp):
         if not keywords:
             QMessageBox.warning(self, "Warning", "Please enter keywords to search!")
             return
-        
-        # Get database password if not set
-        if not self.db_password:
-            password, ok = QInputDialog.getText(self, "Database Password", 
-                                             "Enter MySQL root password:", 
-                                             QLineEdit.Password)
-            if not ok:
-                return
-            self.db_password = password
         
         # Show loading dialog
         self.loading_dialog = QProgressDialog("Searching resumes...", "Cancel", 0, 0, self)
@@ -240,6 +220,55 @@ class IntegratedLandingPage(BukitDuriApp):
         if hasattr(self, 'loading_dialog'):
             self.loading_dialog.close()
         print("Search worker finished")  # Debug line
+    
+    def perform_new_search(self):
+        keywords = self.keyword_input.text().strip()
+        if not keywords:
+            QMessageBox.warning(self, "Warning", "Please enter keywords!")
+            return
+        
+        method = self.method_dropdown.currentText()
+        top_matches = int(self.top_input.text() or "3")
+        
+        # Import SearchWorker
+        from main_gui import SearchWorker
+        
+        # Show loading
+        self.loading_dialog = QProgressDialog("Searching...", "Cancel", 0, 0, self)
+        self.loading_dialog.setWindowModality(Qt.WindowModal)
+        self.loading_dialog.show()
+        
+        # Create search worker
+        self.search_worker = SearchWorker(keywords, method, top_matches, "")
+        self.search_worker.results_ready.connect(self.update_search_results)
+        self.search_worker.error_occurred.connect(self.search_error)
+        self.search_worker.start()
+
+    def update_search_results(self, results):
+        if hasattr(self, 'loading_dialog'):
+            self.loading_dialog.close()
+        
+        # Update data
+        self.search_results = results
+        self.cv_data = []
+        for result in results:
+            self.cv_data.append({
+                'name': result['name'],
+                'matches': result['matches'],
+                'skills': result['skills'],
+                'resume_id': result['resume_id']
+            })
+        
+        self.current_page = 0
+        self.updateCards()
+        
+        # Update results count
+        self.results_label.setText(f"Found {len(self.cv_data)} resumes")
+
+    def search_error(self, error_msg):
+        if hasattr(self, 'loading_dialog'):
+            self.loading_dialog.close()
+        QMessageBox.critical(self, "Search Error", f"Error: {error_msg}")
 
 class IntegratedHomePage(SearchApp):
     """Enhanced homepage with real search results"""
@@ -248,26 +277,33 @@ class IntegratedHomePage(SearchApp):
         self.search_results = search_results or []
         super().__init__()
         
-        # Update cv_data with search results
+        # Convert search results to consistent format
         if self.search_results:
-            self.cv_data = [(result['name'], result['matches'], result['skills']) 
-                           for result in self.search_results]
+            self.cv_data = []
+            for result in self.search_results:
+                self.cv_data.append({
+                    'name': result['name'],
+                    'matches': result['matches'], 
+                    'skills': result['skills'],
+                    'resume_id': result['resume_id']
+                })
         
         self.updateCards()
     
     def setupTopBar(self):
-        # Override to add back button
         top_layout = QHBoxLayout()
-        top_layout.setAlignment(Qt.AlignLeft)
+        top_layout.setSpacing(15)
         
-        back_btn = QPushButton("← Back to Search")
+        # Circular back button
+        back_btn = QPushButton("‹")
+        back_btn.setFixedSize(40, 40)
         back_btn.setStyleSheet("""
             QPushButton {
                 background-color: #00FFC6;
-                border-radius: 10px;
+                border-radius: 20px;
                 color: black;
                 font-weight: bold;
-                padding: 8px 16px;
+                font-size: 24px;
             }
             QPushButton:hover {
                 background-color: #00E6B8;
@@ -275,17 +311,84 @@ class IntegratedHomePage(SearchApp):
         """)
         back_btn.clicked.connect(self.go_back_to_search)
         
+        # Search components
+        method_label = QLabel("Method:")
+        method_label.setStyleSheet("color: white; font-size: 14px;")
+        
+        self.method_dropdown = QComboBox()
+        self.method_dropdown.addItems(["KMP", "BM", "AC"])
+        self.method_dropdown.setFixedSize(80, 36)
+        self.method_dropdown.setStyleSheet("""
+            QComboBox {
+                background-color: #6D797A;
+                color: white;
+                border-radius: 4px;
+                padding: 4px;
+            }
+        """)
+        
+        top_label = QLabel("Top:")
+        top_label.setStyleSheet("color: white; font-size: 14px;")
+        
+        self.top_input = QLineEdit("3")
+        self.top_input.setFixedSize(50, 36)
+        self.top_input.setStyleSheet("""
+            QLineEdit {
+                background-color: #6D797A;
+                color: white;
+                border-radius: 4px;
+                padding: 4px;
+                text-align: center;
+            }
+        """)
+        
+        self.keyword_input = QLineEdit()
+        self.keyword_input.setPlaceholderText("Enter keywords...")
+        self.keyword_input.setFixedHeight(36)
+        self.keyword_input.setFixedWidth(250)
+        self.keyword_input.setStyleSheet("""
+            QLineEdit {
+                background-color: #6D797A;
+                color: white;
+                border-radius: 4px;
+                padding: 4px;
+            }
+        """)
+        
+        self.search_btn = QPushButton("Search")
+        self.search_btn.setFixedSize(80, 36)
+        self.search_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #0AD87E;
+                color: #06312D;
+                font-weight: bold;
+                border-radius: 4px;
+            }
+            QPushButton:hover {
+                background-color: #11f59b;
+            }
+        """)
+        self.search_btn.clicked.connect(self.perform_new_search)
+        
+        # Layout
         top_layout.addWidget(back_btn)
+        top_layout.addWidget(method_label)
+        top_layout.addWidget(self.method_dropdown)
+        top_layout.addWidget(top_label)
+        top_layout.addWidget(self.top_input)
+        top_layout.addWidget(self.keyword_input)
+        top_layout.addWidget(self.search_btn)
         top_layout.addStretch()
         
-        # Add results count
-        results_label = QLabel(f"Found {len(self.cv_data)} matching resumes")
-        results_label.setStyleSheet("color: white; font-size: 16px; font-weight: bold;")
-        top_layout.addWidget(results_label)
+        # Results count on the right
+        self.results_label = QLabel(f"Found {len(self.cv_data)} resumes")
+        self.results_label.setStyleSheet("color: white; font-size: 16px; font-weight: bold;")
+        top_layout.addWidget(self.results_label)
         
         self.main_layout.addLayout(top_layout)
     
     def go_back_to_search(self):
+        from gui.main_gui import IntegratedLandingPage
         self.landing_page = IntegratedLandingPage()
         self.landing_page.show()
         self.close()
