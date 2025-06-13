@@ -197,6 +197,24 @@ class DatabaseManager:
         except mysql.connector.Error as err:
             print(f"Error fetching categories: {err}")
             return []
+        
+    def get_all_resumes(self) -> List[Dict]:
+        """Get all resumes from database"""
+        try:
+            cursor = self.connection.cursor(dictionary=True)
+            query = """
+                SELECT id, filename, category, file_path, extracted_text as content, 
+                    skills, experience, education, gpa, certifications, created_at 
+                FROM resumes 
+                ORDER BY created_at DESC
+            """
+            cursor.execute(query)
+            results = cursor.fetchall()
+            cursor.close()
+            return results
+        except mysql.connector.Error as err:
+            print(f"Error fetching all resumes: {err}")
+            return []
     
     def insert_search_result(self, resume_id: int, search_pattern: str, algorithm_used: str,
                            matches_found: int, match_positions: str = "", 

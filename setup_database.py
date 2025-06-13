@@ -10,14 +10,12 @@ def setup_database():
     """Setup database and load initial data"""
     print("=== Setting up Resume Search Database ===")
     
-    # 123
-    mysql_password = input("Enter MySQL root password: ")
-    
+    # Hapus input password, langsung gunakan empty string
     db_config = {
         'host': 'localhost',
         'user': 'root',
-        'password': mysql_password,
-        'database': 'Tubes3Stima'
+        'password': '',  # Empty password
+        'database': 'Tubes3Stima',
     }
     
     db = DatabaseManager(**db_config)
