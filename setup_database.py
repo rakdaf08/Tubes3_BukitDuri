@@ -14,7 +14,7 @@ def setup_database():
     db_config = {
         'host': 'localhost',
         'user': 'root',
-        'password': '12345678',  # Empty password
+        'password': '',  # Empty password
         'database': 'Tubes3Stima',
     }
     

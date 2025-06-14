@@ -20,7 +20,7 @@ class DatabaseManager:
             self.connection = mysql.connector.connect(
                 host=self.host,
                 user=self.user,
-                password=self.password,
+                password="",
                 database=self.database,
                 autocommit=True
             )
