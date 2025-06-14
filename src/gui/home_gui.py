@@ -30,7 +30,7 @@ class CVCard(QWidget):
 
         # === Name Label ===
         name_label = QLabel(name)
-        name_label.setFont(QFont("Arial", 28, QFont.Bold)) 
+        name_label.setFont(QFont("Arial", 16, QFont.Bold)) 
         name_label.setAlignment(Qt.AlignCenter)
         name_label.setStyleSheet("color: white;")
         card_layout.addWidget(name_label)
@@ -100,14 +100,28 @@ class CVCard(QWidget):
             current_dir = os.path.dirname(os.path.abspath(__file__))
             sys.path.append(current_dir)
             
-            # Get real resume data from database
             db = DatabaseManager(password="123")
             if db.connect():
                 resume = db.get_resume_by_id(self.resume_id)
                 if resume:
-                    # Prepare comprehensive resume data for summary page
+                    display_name = ""
+                    if resume.get('first_name') and resume.get('last_name'):
+                        display_name = f"{resume['first_name']} {resume['last_name']}"
+                    elif resume.get('first_name'):
+                        display_name = resume['first_name']
+                    elif resume.get('last_name'):
+                        display_name = resume['last_name']
+                    else:
+                        display_name = resume['filename'].replace('.pdf', '')
+                    
                     resume_data = {
-                        'name': resume['filename'].replace('.pdf', ''),
+                        'name': display_name,
+                        'first_name': resume.get('first_name'),
+                        'last_name': resume.get('last_name'),
+                        'date_of_birth': resume.get('date_of_birth'),
+                        'address': resume.get('address'),
+                        'phone_number': resume.get('phone_number'),
+                        'application_role': resume.get('application_role'),
                         'skills': resume['skills'] if resume['skills'] else 'No skills data available',
                         'experience': resume['experience'] if resume['experience'] else '',
                         'education': resume['education'] if resume['education'] else '',
@@ -117,18 +131,18 @@ class CVCard(QWidget):
                         'resume_id': self.resume_id,
                         'file_path': resume['file_path'],
                         'extracted_text': resume.get('extracted_text', '') or resume.get('content', ''),
-                        'created_at': resume.get('created_at', 'Unknown')
+                        'created_at': resume.get('created_at', 'Unknown'),
+                        'filename': resume.get('filename')
                     }
                     
-                    # Debug: Print what data we're sending
                     print(f"DEBUG - Resume data being sent to summary:")
                     print(f"Name: {resume_data['name']}")
-                    print(f"Skills: {resume_data['skills'][:100]}..." if len(str(resume_data['skills'])) > 100 else f"Skills: {resume_data['skills']}")
-                    print(f"Experience: {resume_data['experience'][:100]}..." if len(str(resume_data['experience'])) > 100 else f"Experience: {resume_data['experience']}")
-                    print(f"Education: {resume_data['education'][:100]}..." if len(str(resume_data['education'])) > 100 else f"Education: {resume_data['education']}")
-                    print(f"Has extracted_text: {bool(resume_data['extracted_text'])}")
+                    print(f"First Name: {resume_data['first_name']}")
+                    print(f"Last Name: {resume_data['last_name']}")
+                    print(f"Date of Birth: {resume_data['date_of_birth']}")
+                    print(f"Address: {resume_data['address']}")
+                    print(f"Phone: {resume_data['phone_number']}")
                     
-                    # Create and show summary page
                     self.summary_page = SummaryPage(resume_data)
                     self.summary_page.show()
                 else:
@@ -138,7 +152,7 @@ class CVCard(QWidget):
                 QMessageBox.critical(self, "Database Error", "Could not connect to database")
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Could not open summary: {str(e)}")
-            print(f"DEBUG - Error in view_more_clicked: {e}")  # Debug info
+            print(f"DEBUG - Error in view_more_clicked: {e}")
 
     def view_cv_clicked(self):
         try:

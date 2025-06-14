@@ -1,5 +1,7 @@
-import sys
 import os
+import sys
+import subprocess
+
 from PyQt5.QtWidgets import *
 from PyQt5.QtCore import Qt, QThread, pyqtSignal, QTimer
 from PyQt5.QtGui import QFont
@@ -131,11 +133,31 @@ class DatabaseSetupWorker(QThread):
             seeding_file = os.path.join(root_dir, 'tubes3_seeding.sql')
             if os.path.exists(seeding_file):
                 print(f"Found seeding file: {seeding_file}")
-                # You can implement seeding logic here if needed
+                # Run MySQL command to execute the SQL file
+                cmd = [
+                    'mysql',
+                    '-h', db_config['host'],
+                    '-u', db_config['user'],
+                    db_config['database']
+                ]
+                
+                # Add password if not empty
+                if db_config['password']:
+                    cmd.extend(['-p' + db_config['password']])
+                
+                # Execute the SQL file
+                with open(seeding_file, 'r', encoding='utf-8') as f:
+                    result = subprocess.run(cmd, stdin=f, capture_output=True, text=True)
+                
+                if result.returncode == 0:
+                    print("Seeding SQL executed successfully")
+                else:
+                    print(f"Error executing seeding SQL: {result.stderr}")
                 return True
             else:
                 print("No seeding file found, skipping...")
                 return True
+            
         except Exception as e:
             print(f"Seeding error: {e}")
             return False

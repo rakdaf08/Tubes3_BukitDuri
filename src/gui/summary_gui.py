@@ -106,12 +106,7 @@ class SummaryPage(QWidget):
         layout.addLayout(header)
 
     def create_candidate_name(self, layout):
-        """Create candidate name display"""
-        name_text = self.resume_data.get('name', 'Unknown Candidate')
-        if name_text.endswith('.pdf'):
-            name_text = name_text[:-4]  # Remove .pdf extension
-        
-        # Name container with background
+        """Create candidate name display with profile information"""
         name_container = QWidget()
         name_container.setStyleSheet("""
             QWidget {
@@ -124,13 +119,205 @@ class SummaryPage(QWidget):
         name_layout = QVBoxLayout(name_container)
         name_layout.setContentsMargins(30, 20, 30, 20)
         
-        name = QLabel(name_text)
-        name.setFont(QFont("Arial", 42, QFont.Bold))
-        name.setStyleSheet("color: white; background: transparent;")
-        name.setAlignment(Qt.AlignCenter)
-        name_layout.addWidget(name)
+        # PRIORITIZED NAME DISPLAY
+        display_name = "Unknown Candidate"
+        
+        # First try to get real name from profile
+        first_name = self.resume_data.get('first_name')
+        last_name = self.resume_data.get('last_name')
+        
+        if first_name and last_name:
+            display_name = f"{first_name} {last_name}"
+        elif first_name:
+            display_name = first_name
+        elif last_name:
+            display_name = last_name
+        else:
+            # Fallback to filename without .pdf and without numbers
+            filename = self.resume_data.get('filename', 'Unknown')
+            if filename.endswith('.pdf'):
+                filename = filename[:-4]
+            
+            # If filename is just numbers, use a generic name
+            if filename.isdigit():
+                display_name = f"Candidate {filename}"
+            else:
+                display_name = filename
+        
+        name_label = QLabel(display_name)
+        name_label.setFont(QFont("Arial", 42, QFont.Bold))
+        name_label.setStyleSheet("color: white; background: transparent;")
+        name_label.setAlignment(Qt.AlignCenter)
+        name_layout.addWidget(name_label)
+        
+        # Profile information section
+        profile_info_layout = QHBoxLayout()
+        profile_info_layout.setSpacing(40)
+        
+        # Left column - Personal Info
+        left_info = QVBoxLayout()
+        left_info.setSpacing(8)
+        
+        # Birth date
+        birth_date = self.resume_data.get('date_of_birth')
+        if birth_date:
+            birth_label = QLabel(f"Birthdate: {birth_date}")
+            birth_label.setFont(QFont("Arial", 14))
+            birth_label.setStyleSheet("color: white; background: transparent;")
+            left_info.addWidget(birth_label)
+        
+        # Address
+        address = self.resume_data.get('address')
+        if address:
+            address_label = QLabel(f"Address: {address}")
+            address_label.setFont(QFont("Arial", 14))
+            address_label.setStyleSheet("color: white; background: transparent;")
+            address_label.setWordWrap(True)
+            left_info.addWidget(address_label)
+        
+        # Right column - Contact & Role
+        right_info = QVBoxLayout()
+        right_info.setSpacing(8)
+        
+        # Phone number
+        phone = self.resume_data.get('phone_number')
+        if phone:
+            phone_label = QLabel(f"Phone: {phone}")
+            phone_label.setFont(QFont("Arial", 14))
+            phone_label.setStyleSheet("color: white; background: transparent;")
+            right_info.addWidget(phone_label)
+        
+        # Application role
+        role = self.resume_data.get('application_role')
+        if role:
+            role_label = QLabel(f"Applying for: {role}")
+            role_label.setFont(QFont("Arial", 14, QFont.Bold))
+            role_label.setStyleSheet("color: #FFE066; background: transparent;")
+            role_label.setWordWrap(True)
+            right_info.addWidget(role_label)
+        
+        # Show filename for debugging
+        filename = self.resume_data.get('filename')
+        if filename:
+            file_debug = QLabel(f"Source: {filename}")
+            file_debug.setFont(QFont("Arial", 12))
+            file_debug.setStyleSheet("color: #B0B0B0; background: transparent;")
+            right_info.addWidget(file_debug)
+        
+        # Add info columns to profile layout
+        if left_info.count() > 0 or right_info.count() > 0:
+            if left_info.count() > 0:
+                left_widget = QWidget()
+                left_widget.setLayout(left_info)
+                profile_info_layout.addWidget(left_widget)
+            
+            if right_info.count() > 0:
+                right_widget = QWidget()
+                right_widget.setLayout(right_info)
+                profile_info_layout.addWidget(right_widget)
+            
+            # Add spacing and profile info to main layout
+            name_layout.addSpacing(15)
+            name_layout.addLayout(profile_info_layout)
         
         layout.addWidget(name_container)
+
+    def create_overview_section(self, layout):
+        """Create overview/summary section with enhanced profile info"""
+        overview_data = self.extract_overview()
+        
+        # Overview title
+        overview_title = QLabel("Professional Overview")
+        overview_title.setFont(QFont("Arial", 28, QFont.Bold))
+        overview_title.setStyleSheet("color: #00FFC6; margin: 20px 0px 15px 0px;")
+        overview_title.setAlignment(Qt.AlignCenter)
+        layout.addWidget(overview_title)
+
+        # Overview container
+        overview_container = QGroupBox()
+        overview_container.setStyleSheet("""
+            QGroupBox {
+                background-color: #1E4A42;
+                border-radius: 15px;
+                border: 2px solid #037F68;
+                padding: 20px;
+            }
+        """)
+        overview_layout = QVBoxLayout(overview_container)
+        overview_layout.setContentsMargins(25, 25, 25, 25)
+
+        # Add profile summary at the top if we have profile data
+        if any([self.resume_data.get('first_name'), self.resume_data.get('application_role')]):
+            profile_summary_layout = QHBoxLayout()
+            profile_summary_layout.setSpacing(30)
+            
+            # Basic info
+            basic_info = QVBoxLayout()
+            
+            if self.resume_data.get('first_name') or self.resume_data.get('last_name'):
+                full_name = f"{self.resume_data.get('first_name', '')} {self.resume_data.get('last_name', '')}".strip()
+                name_info = QLabel(f"Full Name: {full_name}")
+                name_info.setStyleSheet("color: #00FFC6; font-size: 14px; font-weight: bold;")
+                basic_info.addWidget(name_info)
+            
+            if self.resume_data.get('application_role'):
+                role_info = QLabel(f"Target Role: {self.resume_data.get('application_role')}")
+                role_info.setStyleSheet("color: #FFE066; font-size: 14px; font-weight: bold;")
+                basic_info.addWidget(role_info)
+            
+            # File info
+            file_info = QVBoxLayout()
+            
+            if self.resume_data.get('filename'):
+                filename_info = QLabel(f"Source: {self.resume_data.get('filename')}")
+                filename_info.setStyleSheet("color: #B0B0B0; font-size: 12px;")
+                file_info.addWidget(filename_info)
+            
+            if self.resume_data.get('category'):
+                category_info = QLabel(f"Category: {self.resume_data.get('category')}")
+                category_info.setStyleSheet("color: #B0B0B0; font-size: 12px;")
+                file_info.addWidget(category_info)
+            
+            # Add to profile summary
+            if basic_info.count() > 0:
+                basic_widget = QWidget()
+                basic_widget.setLayout(basic_info)
+                profile_summary_layout.addWidget(basic_widget)
+            
+            if file_info.count() > 0:
+                file_widget = QWidget()
+                file_widget.setLayout(file_info)
+                profile_summary_layout.addWidget(file_widget)
+            
+            profile_summary_layout.addStretch()
+            
+            # Add profile summary to overview
+            if profile_summary_layout.count() > 1:  # More than just stretch
+                overview_layout.addLayout(profile_summary_layout)
+                
+                # Add separator
+                separator = QLabel("─" * 50)
+                separator.setStyleSheet("color: #037F68; margin: 15px 0px;")
+                separator.setAlignment(Qt.AlignCenter)
+                overview_layout.addWidget(separator)
+
+        # Overview text with white color
+        overview_text = QLabel(overview_data)
+        overview_text.setStyleSheet("""
+            QLabel {
+                color: white;
+                font-size: 16px;
+                line-height: 28px;
+                background: transparent;
+                padding: 15px;
+                font-weight: 400;
+            }
+        """)
+        overview_text.setWordWrap(True)
+        overview_text.setAlignment(Qt.AlignLeft)
+        overview_layout.addWidget(overview_text)
+
+        layout.addWidget(overview_container)
 
     def create_skills_section(self, layout):
         """Create skills section with pagination"""
@@ -274,48 +461,6 @@ class SummaryPage(QWidget):
         """Change skills page"""
         self.skills_page += direction
         self.update_skills_display(all_skills)
-
-    def create_overview_section(self, layout):
-        """Create overview/summary section with white text"""
-        overview_data = self.extract_overview()
-        
-        # Overview title
-        overview_title = QLabel("Professional Overview")
-        overview_title.setFont(QFont("Arial", 28, QFont.Bold))
-        overview_title.setStyleSheet("color: #00FFC6; margin: 20px 0px 15px 0px;")
-        overview_title.setAlignment(Qt.AlignCenter)
-        layout.addWidget(overview_title)
-
-        # Overview container
-        overview_container = QGroupBox()
-        overview_container.setStyleSheet("""
-            QGroupBox {
-                background-color: #1E4A42;
-                border-radius: 15px;
-                border: 2px solid #037F68;
-                padding: 20px;
-            }
-        """)
-        overview_layout = QVBoxLayout(overview_container)
-        overview_layout.setContentsMargins(25, 25, 25, 25)
-
-        # Overview text with white color
-        overview_text = QLabel(overview_data)
-        overview_text.setStyleSheet("""
-            QLabel {
-                color: white;
-                font-size: 16px;
-                line-height: 28px;
-                background: transparent;
-                padding: 15px;
-                font-weight: 400;
-            }
-        """)
-        overview_text.setWordWrap(True)
-        overview_text.setAlignment(Qt.AlignLeft)
-        overview_layout.addWidget(overview_text)
-
-        layout.addWidget(overview_container)
 
     def create_exp_edu_section(self, layout):
         """Create experience and education sections side by side with pagination"""

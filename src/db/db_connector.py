@@ -279,6 +279,7 @@ class DatabaseManager:
         except mysql.connector.Error as err:
             print(f"Error fetching statistics: {err}")
             return {}
+        
     def insert_resume_with_profile(self, filename, category, file_path, extracted_text, 
                                 skills=None, experience=None, education=None, 
                                 gpa=None, certifications=None,
@@ -358,22 +359,74 @@ class DatabaseManager:
             return []
 
     def get_all_resumes(self):
-        """Get all resumes with profile data"""
+        """Get all resumes with profile data from ApplicationDetail matching"""
         try:
             cursor = self.connection.cursor(dictionary=True)
+            
+            # Join resumes with profile data through cv_path matching
             query = """
-            SELECT id, filename, category, extracted_text as content, 
-                first_name, last_name, application_role,
-                date_of_birth, address, phone_number,
-                skills, experience, education, gpa, certifications
-            FROM resumes 
-            ORDER BY created_at DESC
+            SELECT r.*, 
+                ap.first_name, ap.last_name, ap.date_of_birth, 
+                ap.address, ap.phone_number,
+                ad.application_role
+            FROM resumes r
+            LEFT JOIN ApplicationDetail ad ON (
+                ad.cv_path LIKE CONCAT('%', r.filename) OR
+                ad.cv_path LIKE CONCAT('%', r.category, '/', r.filename) OR
+                SUBSTRING_INDEX(ad.cv_path, '/', -1) = r.filename
+            )
+            LEFT JOIN ApplicantProfile ap ON ad.applicant_id = ap.applicant_id
+            ORDER BY r.id
             """
+            
             cursor.execute(query)
-            return cursor.fetchall()
+            resumes = cursor.fetchall()
+            
+            print(f"DEBUG - Found {len(resumes)} resumes with profile matching")
+            
+            # Debug first few results
+            for i, resume in enumerate(resumes[:3]):
+                print(f"DEBUG - Resume {i+1}: {resume['filename']} -> {resume.get('first_name', 'No name')} {resume.get('last_name', '')}")
+            
+            return resumes
+            
         except Exception as e:
             print(f"Error getting all resumes: {e}")
             return []
+
+    def get_resume_by_id(self, resume_id):
+        """Get resume by ID with profile data"""
+        try:
+            cursor = self.connection.cursor(dictionary=True)
+            
+            # Join with profile data
+            query = """
+            SELECT r.*, 
+                ap.first_name, ap.last_name, ap.date_of_birth, 
+                ap.address, ap.phone_number,
+                ad.application_role
+            FROM resumes r
+            LEFT JOIN ApplicationDetail ad ON (
+                ad.cv_path LIKE CONCAT('%', r.filename) OR
+                ad.cv_path LIKE CONCAT('%', r.category, '/', r.filename) OR
+                SUBSTRING_INDEX(ad.cv_path, '/', -1) = r.filename
+            )
+            LEFT JOIN ApplicantProfile ap ON ad.applicant_id = ap.applicant_id
+            WHERE r.id = %s
+            """
+            
+            cursor.execute(query, (resume_id,))
+            resume = cursor.fetchone()
+            
+            if resume:
+                print(f"DEBUG - Resume {resume_id}: {resume['filename']} -> {resume.get('first_name', 'No name')} {resume.get('last_name', '')}")
+            
+            return resume
+            
+        except Exception as e:
+            print(f"Error getting resume by ID {resume_id}: {e}")
+            return None
+    
 def get_connection():
     """Legacy function - use DatabaseManager class instead"""
     db = DatabaseManager()

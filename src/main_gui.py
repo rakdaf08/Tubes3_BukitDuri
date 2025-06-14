@@ -121,12 +121,22 @@ class SearchWorker(QThread):
                     found_keywords.add(keyword)
             
             if total_matches > 0:
-                # Use real name if available, otherwise filename
                 display_name = ""
-                if resume.get('first_name') and resume.get('last_name'):
-                    display_name = f"{resume['first_name']} {resume['last_name']}"
+                first_name = resume.get('first_name')
+                last_name = resume.get('last_name')
+                
+                if first_name and last_name:
+                    display_name = f"{first_name} {last_name}"
+                elif first_name:
+                    display_name = first_name
+                elif last_name:
+                    display_name = last_name
                 else:
-                    display_name = resume['filename'].replace('.pdf', '')
+                    filename = resume['filename'].replace('.pdf', '')
+                    if filename.isdigit():
+                        display_name = f"Candidate {filename}"
+                    else:
+                        display_name = filename
                 
                 results.append({
                     'name': display_name,
@@ -140,7 +150,8 @@ class SearchWorker(QThread):
                         'application_role': resume.get('application_role'),
                         'date_of_birth': resume.get('date_of_birth'),
                         'address': resume.get('address'),
-                        'phone_number': resume.get('phone_number')
+                        'phone_number': resume.get('phone_number'),
+                        'filename': resume.get('filename')
                     }
                 })
         
@@ -169,12 +180,22 @@ class SearchWorker(QThread):
                         fuzzy_skill_matches[f"{keyword} (fuzzy)"] = len(high_sim_matches)
             
             if total_fuzzy_matches > 0:
-                # Use real name if available
                 display_name = ""
-                if resume.get('first_name') and resume.get('last_name'):
-                    display_name = f"{resume['first_name']} {resume['last_name']}"
+                first_name = resume.get('first_name')
+                last_name = resume.get('last_name')
+                
+                if first_name and last_name:
+                    display_name = f"{first_name} {last_name}"
+                elif first_name:
+                    display_name = first_name
+                elif last_name:
+                    display_name = last_name
                 else:
-                    display_name = resume['filename'].replace('.pdf', '')
+                    filename = resume['filename'].replace('.pdf', '')
+                    if filename.isdigit():
+                        display_name = f"Candidate {filename}"
+                    else:
+                        display_name = filename
                 
                 results.append({
                     'name': display_name,
@@ -188,12 +209,13 @@ class SearchWorker(QThread):
                         'application_role': resume.get('application_role'),
                         'date_of_birth': resume.get('date_of_birth'),
                         'address': resume.get('address'),
-                        'phone_number': resume.get('phone_number')
+                        'phone_number': resume.get('phone_number'),
+                        'filename': resume.get('filename')
                     }
                 })
         
         return results
-    
+            
     def combine_results(self, exact_results, fuzzy_results):
         """Combine exact and fuzzy results, avoiding duplicates"""
         # Create dict to track resumes by ID
