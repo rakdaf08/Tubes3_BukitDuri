@@ -3,7 +3,7 @@ import os
 import getpass
 from PyQt5.QtWidgets import *
 from PyQt5.QtGui import QFont, QCursor, QIcon, QFontDatabase
-from PyQt5.QtCore import Qt, QSize, QThread, pyqtSignal
+from PyQt5.QtCore import Qt, QSize, QThread, pyqtSignal, QTimer
 
 # Add current directory to path
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -24,7 +24,7 @@ class SearchWorker(QThread):
     results_ready = pyqtSignal(list)
     error_occurred = pyqtSignal(str)
     
-    def __init__(self, keywords, method, top_matches, db_password="123"):
+    def __init__(self, keywords, method, top_matches, db_password=""):
         super().__init__()
         self.keywords = keywords
         self.method = method
@@ -34,7 +34,7 @@ class SearchWorker(QThread):
     def run(self):
         try:
             # Connect to database with empty password
-            db = DatabaseManager(password="123")
+            db = DatabaseManager(password="")
             if not db.connect():
                 self.error_occurred.emit("Failed to connect to database")
                 return
@@ -221,8 +221,28 @@ class IntegratedLandingPage(BukitDuriApp):
         
         print(f"Search completed! Found {len(results)} results")  # Debug line
         
-        # Create and show results window
-        self.results_window = IntegratedHomePage(results)
+        # Prepare search parameters to pass to home page
+        line_edits = self.findChildren(QLineEdit)
+        keywords = line_edits[0].text().strip() if line_edits else ""
+        top_matches = int(line_edits[1].text() or "3") if len(line_edits) > 1 else 3
+        
+        # Get selected method
+        method = "KMP"  # Default
+        if self.kmp_btn.isChecked():
+            method = "KMP"
+        elif self.bm_btn.isChecked():
+            method = "BM"
+        elif self.ac_btn.isChecked():
+            method = "AC"
+        
+        search_params = {
+            'keywords': keywords,
+            'method': method,
+            'top_matches': top_matches
+        }
+        
+        # Create and show results window with search parameters
+        self.results_window = IntegratedHomePage(results, search_params)
         self.results_window.show()
         self.close()
     
@@ -287,10 +307,9 @@ class IntegratedLandingPage(BukitDuriApp):
         QMessageBox.critical(self, "Search Error", f"Error: {error_msg}")
 
 class IntegratedHomePage(SearchApp):
-    """Enhanced homepage with real search results"""
-    
-    def __init__(self, search_results=None):
+    def __init__(self, search_results=None, search_params=None):
         self.search_results = search_results or []
+        self.search_params = search_params or {}  # Store search parameters
         super().__init__()
         
         # Convert search results to consistent format
@@ -304,7 +323,23 @@ class IntegratedHomePage(SearchApp):
                     'resume_id': result['resume_id']
                 })
         
+        # Populate search fields with previous values
+        self.populate_search_fields()
         self.updateCards()
+    
+    def populate_search_fields(self):
+        """Populate search fields with values from landing page"""
+        if hasattr(self, 'keyword_input') and self.search_params.get('keywords'):
+            self.keyword_input.setText(self.search_params['keywords'])
+        
+        if hasattr(self, 'method_dropdown') and self.search_params.get('method'):
+            method = self.search_params['method']
+            index = self.method_dropdown.findText(method)
+            if index >= 0:
+                self.method_dropdown.setCurrentIndex(index)
+        
+        if hasattr(self, 'top_input') and self.search_params.get('top_matches'):
+            self.top_input.setText(str(self.search_params['top_matches']))
     
     def setupTopBar(self):
         top_layout = QHBoxLayout()
@@ -402,12 +437,51 @@ class IntegratedHomePage(SearchApp):
         top_layout.addWidget(self.results_label)
         
         self.main_layout.addLayout(top_layout)
+        
+        # Populate search fields AFTER UI elements are created
+        self.populate_search_fields()
     
     def go_back_to_search(self):
-        from gui.main_gui import IntegratedLandingPage
-        self.landing_page = IntegratedLandingPage()
-        self.landing_page.show()
-        self.close()
+        """Go back to landing page with current search values"""
+        try:
+            # Create landing page
+            self.landing_page = IntegratedLandingPage()
+            
+            # Populate landing page with current search values
+            if hasattr(self, 'keyword_input') and hasattr(self, 'method_dropdown') and hasattr(self, 'top_input'):
+                # Wait for landing page to be fully initialized
+                QTimer.singleShot(100, lambda: self.populate_landing_page())
+            
+            self.landing_page.show()
+            self.close()
+        except Exception as e:
+            print(f"Error going back to search: {e}")
+            self.close()
+
+    def populate_landing_page(self):
+        """Populate landing page with current search values"""
+        try:
+            # Get current values
+            current_keywords = self.keyword_input.text()
+            current_method = self.method_dropdown.currentText()
+            current_top = self.top_input.text()
+            
+            # Find and populate landing page fields
+            line_edits = self.landing_page.findChildren(QLineEdit)
+            if len(line_edits) >= 2:
+                line_edits[0].setText(current_keywords)  # Keywords field
+                line_edits[1].setText(current_top)        # Top matches field
+            
+            # Set method button
+            if current_method == "KMP":
+                self.landing_page.kmp_btn.setChecked(True)
+            elif current_method == "BM":
+                self.landing_page.bm_btn.setChecked(True)
+            elif current_method == "AC":
+                self.landing_page.ac_btn.setChecked(True)
+                
+        except Exception as e:
+            print(f"Error populating landing page: {e}")
 
 class IntegratedSummaryPage(SummaryPage):
     """Enhanced summary page with real resume data"""
@@ -431,34 +505,144 @@ class IntegratedSummaryPage(SummaryPage):
             pass  # Implementation depends on your data structure
 
 class MainApplication(QApplication):
-    """Main application controller"""
-    
     def __init__(self, sys_argv):
         super().__init__(sys_argv)
         self.setApplicationName("Bukit Duri CV Analyzer")
-        
-        # Load fonts
         self.load_fonts()
-        
-        # Show landing page
-        self.landing_page = IntegratedLandingPage()
-        self.landing_page.show()
+        self.check_database_setup()
     
     def load_fonts(self):
+        """Load custom fonts for the application"""
         try:
-            font_path = os.path.join(os.path.dirname(__file__), "font/Inter_24pt-Regular.ttf")
+            # Try to load Inter font
+            font_path = os.path.join(os.path.dirname(__file__), "font", "Inter_24pt-Regular.ttf")
             if os.path.exists(font_path):
                 font_id = QFontDatabase.addApplicationFont(font_path)
                 if font_id != -1:
                     families = QFontDatabase.applicationFontFamilies(font_id)
-                    self.setFont(QFont(families[0] if families else "Arial", 10))
+                    if families:
+                        self.setFont(QFont(families[0], 10))
+                        print(f"Loaded custom font: {families[0]}")
+                    else:
+                        self.setFont(QFont("Arial", 10))
+                else:
+                    print("Failed to load custom font, using Arial")
+                    self.setFont(QFont("Arial", 10))
+            else:
+                print("Font file not found, using Arial")
+                self.setFont(QFont("Arial", 10))
         except Exception as e:
-            print(f"Font loading error: {e}")
+            print(f"Error loading fonts: {e}")
             self.setFont(QFont("Arial", 10))
+    
+    def check_database_setup(self):
+        """Always run fresh database setup"""
+        try:
+            # Always reset database first
+            self.reset_database()
+            # Then show setup GUI
+            self.show_setup_gui()
+        except Exception as e:
+            print(f"Database reset error: {e}")
+            self.show_setup_gui()
+
+    def reset_database(self):
+        """Reset database before setup"""
+        try:
+            sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
+            from src.db.db_connector import DatabaseManager
+            
+            # Connect without specifying database
+            import mysql.connector
+            temp_conn = mysql.connector.connect(
+                host='localhost',
+                user='root',
+                password=''
+            )
+            cursor = temp_conn.cursor()
+            
+            # Drop existing database
+            cursor.execute("DROP DATABASE IF EXISTS Tubes3Stima")
+            print("Dropped existing database")
+            
+            temp_conn.close()
+            
+        except Exception as e:
+            print(f"Database reset error: {e}")
+    
+    def show_setup_gui(self):
+        try:
+            # Fix import path
+            sys.path.append(os.path.join(os.path.dirname(__file__), 'gui'))
+            from database_setup_gui import DatabaseSetupGUI
+            
+            self.setup_gui = DatabaseSetupGUI()
+            self.setup_gui.setup_completed.connect(self.on_setup_completed)
+            self.setup_gui.show()
+            self.setup_gui.start_setup()
+        except ImportError as e:
+            print(f"Setup GUI import error: {e}")
+            # If setup GUI doesn't exist, try direct setup
+            print("Setup GUI not found, running direct setup...")
+            self.run_direct_setup()
+        except Exception as e:
+            print(f"Setup GUI error: {e}")
+            self.run_direct_setup()
+    
+    def run_direct_setup(self):
+        """Run setup directly without GUI"""
+        try:
+            sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
+            from setup_database import setup_database
+            
+            print("Running database setup...")
+            success = setup_database()
+            
+            if success:
+                print("Database setup completed!")
+                self.show_main_app()
+            else:
+                print("Database setup failed!")
+                self.quit()
+        except Exception as e:
+            print(f"Direct setup error: {e}")
+            self.quit()
+    
+    def on_setup_completed(self, success):
+        """Handle setup completion"""
+        if hasattr(self, 'setup_gui'):
+            self.setup_gui.close()
+        
+        if success:
+            self.show_main_app()
+        else:
+            # Show error and exit
+            msg = QMessageBox()
+            msg.setIcon(QMessageBox.Critical)
+            msg.setWindowTitle("Setup Failed")
+            msg.setText("Database setup failed. Please check your MySQL installation.")
+            msg.exec_()
+            self.quit()
+    
+    def show_main_app(self):
+        """Show main application"""
+        self.landing_page = IntegratedLandingPage()
+        self.landing_page.show()
 
 def main():
-    app = MainApplication(sys.argv)
-    sys.exit(app.exec_())
+    
+    # Add src to path
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    src_dir = os.path.join(current_dir, 'src')
+    sys.path.insert(0, src_dir)
+    sys.path.insert(0, current_dir)
+    
+    try:
+        app = MainApplication(sys.argv)
+        return app.exec_()
+    except Exception as e:
+        print(f"Error starting application: {e}")
+        return 1
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
