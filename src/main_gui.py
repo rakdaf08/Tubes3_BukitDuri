@@ -24,7 +24,7 @@ class SearchWorker(QThread):
     results_ready = pyqtSignal(list)  # Add this signal
     error_occurred = pyqtSignal(str)  # Add this signal
     
-    def __init__(self, keywords, method, top_matches, db_password=""):
+    def __init__(self, keywords, method, top_matches, db_password="12345678"):
         super().__init__()
         self.keywords = keywords
         self.method = method
@@ -34,7 +34,7 @@ class SearchWorker(QThread):
     def run(self):
         try:
             # Connect tanpa password
-            db = DatabaseManager(password="")
+            db = DatabaseManager(password="12345678")
             if not db.connect():
                 self.error_occurred.emit("Failed to connect to database")
                 return
