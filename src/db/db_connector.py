@@ -6,7 +6,7 @@ from datetime import datetime
 import json
 
 class DatabaseManager:
-    def __init__(self, host="localhost", user="root", password="", database="Tubes3Stima"):
+    def __init__(self, host="localhost", user="root", password="123", database="Tubes3Stima"):
         """Initialize database manager with connection parameters"""
         self.host = host
         self.user = user
@@ -20,7 +20,7 @@ class DatabaseManager:
             self.connection = mysql.connector.connect(
                 host=self.host,
                 user=self.user,
-                password="",
+                password="123",
                 database=self.database,
                 autocommit=True
             )
@@ -279,7 +279,102 @@ class DatabaseManager:
         except mysql.connector.Error as err:
             print(f"Error fetching statistics: {err}")
             return {}
+    def insert_resume_with_profile(self, filename, category, file_path, extracted_text, 
+                                skills=None, experience=None, education=None, 
+                                gpa=None, certifications=None,
+                                # Profile data
+                                applicant_id=None, first_name=None, last_name=None,
+                                date_of_birth=None, address=None, phone_number=None,
+                                application_role=None):
+        """Insert resume with complete profile information"""
+        try:
+            cursor = self.connection.cursor()
+            
+            insert_query = """
+            INSERT INTO resumes (
+                filename, category, file_path, extracted_text, skills, 
+                experience, education, gpa, certifications,
+                applicant_id, first_name, last_name, date_of_birth, 
+                address, phone_number, application_role, created_at
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
+            """
+            
+            cursor.execute(insert_query, (
+                filename, category, file_path, extracted_text, skills,
+                experience, education, gpa, certifications,
+                applicant_id, first_name, last_name, date_of_birth,
+                address, phone_number, application_role
+            ))
+            
+            self.connection.commit()
+            return cursor.lastrowid
+            
+        except Exception as e:
+            print(f"Error inserting resume with profile: {e}")
+            self.connection.rollback()
+            return -1
 
+    def search_resumes_with_profile(self, keyword="", category=None, skill_filter=None, 
+                                experience_filter=None, limit=50):
+        """Search resumes and return with profile information"""
+        try:
+            cursor = self.connection.cursor(dictionary=True)
+            
+            base_query = """
+            SELECT id, filename, category, first_name, last_name, date_of_birth,
+                address, phone_number, application_role, skills, experience,
+                education, gpa, certifications, created_at, extracted_text
+            FROM resumes
+            WHERE 1=1
+            """
+            
+            params = []
+            
+            if keyword:
+                base_query += " AND (extracted_text LIKE %s OR skills LIKE %s OR experience LIKE %s)"
+                keyword_param = f"%{keyword}%"
+                params.extend([keyword_param, keyword_param, keyword_param])
+            
+            if category:
+                base_query += " AND category = %s"
+                params.append(category)
+                
+            if skill_filter:
+                base_query += " AND skills LIKE %s"
+                params.append(f"%{skill_filter}%")
+                
+            if experience_filter:
+                base_query += " AND experience LIKE %s"
+                params.append(f"%{experience_filter}%")
+            
+            base_query += f" ORDER BY created_at DESC LIMIT {limit}"
+            
+            cursor.execute(base_query, params)
+            results = cursor.fetchall()
+            
+            return results
+            
+        except Exception as e:
+            print(f"Error searching resumes with profile: {e}")
+            return []
+
+    def get_all_resumes(self):
+        """Get all resumes with profile data"""
+        try:
+            cursor = self.connection.cursor(dictionary=True)
+            query = """
+            SELECT id, filename, category, extracted_text as content, 
+                first_name, last_name, application_role,
+                date_of_birth, address, phone_number,
+                skills, experience, education, gpa, certifications
+            FROM resumes 
+            ORDER BY created_at DESC
+            """
+            cursor.execute(query)
+            return cursor.fetchall()
+        except Exception as e:
+            print(f"Error getting all resumes: {e}")
+            return []
 def get_connection():
     """Legacy function - use DatabaseManager class instead"""
     db = DatabaseManager()
