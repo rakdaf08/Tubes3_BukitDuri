@@ -1,6 +1,8 @@
 import sys
 import os
 import getpass
+import time
+from fuzzywuzzy import fuzz
 from PyQt5.QtWidgets import *
 from PyQt5.QtGui import QFont, QCursor, QIcon, QFontDatabase
 from PyQt5.QtCore import Qt, QSize, QThread, pyqtSignal, QTimer
@@ -23,6 +25,7 @@ from src.db.db_connector import DatabaseManager
 class SearchWorker(QThread):
     results_ready = pyqtSignal(list)
     error_occurred = pyqtSignal(str)
+    timing_info = pyqtSignal(dict)  # New signal for timing information
     
     def __init__(self, keywords, method, top_matches, db_password=""):
         super().__init__()
@@ -33,30 +36,158 @@ class SearchWorker(QThread):
     
     def run(self):
         try:
-            # Connect to database with empty password
+            # Connect to database
             db = DatabaseManager(password="")
             if not db.connect():
                 self.error_occurred.emit("Failed to connect to database")
                 return
             
-            # Perform search based on method
-            if self.method == "KMP":
-                results = self.search_with_kmp(db)
-            elif self.method == "BM":
-                results = self.search_with_bm(db)
-            elif self.method == "AC":
-                results = self.search_with_ac(db)
-            else:
-                results = []
+            # Get all resumes
+            all_resumes = db.get_all_resumes()
             
-            # Limit results to top matches
-            results = results[:self.top_matches]
+            # Perform exact matching first
+            exact_start_time = time.time()
+            exact_results, found_keywords = self.perform_exact_search(all_resumes)
+            exact_time = (time.time() - exact_start_time) * 1000  # Convert to ms
             
-            self.results_ready.emit(results)
+            # Get keywords that weren't found in exact matching
+            keywords_list = [k.strip() for k in self.keywords.split(',')]
+            missing_keywords = [kw for kw in keywords_list if kw not in found_keywords]
+            
+            # Perform fuzzy matching for missing keywords
+            fuzzy_results = []
+            fuzzy_time = 0
+            
+            if missing_keywords:
+                fuzzy_start_time = time.time()
+                fuzzy_results = self.perform_fuzzy_search(all_resumes, missing_keywords)
+                fuzzy_time = (time.time() - fuzzy_start_time) * 1000
+            
+            # Combine results
+            combined_results = self.combine_results(exact_results, fuzzy_results)
+            
+            # Sort by total matches and limit
+            final_results = sorted(combined_results, key=lambda x: x['matches'], reverse=True)[:self.top_matches]
+            
+            # Emit timing information
+            timing_data = {
+                'exact_time': exact_time,
+                'fuzzy_time': fuzzy_time,
+                'exact_count': len(exact_results),
+                'fuzzy_count': len(fuzzy_results),
+                'total_scanned': len(all_resumes),
+                'missing_keywords': missing_keywords
+            }
+            
+            self.timing_info.emit(timing_data)
+            self.results_ready.emit(final_results)
             db.disconnect()
             
         except Exception as e:
             self.error_occurred.emit(str(e))
+    
+    def perform_exact_search(self, all_resumes):
+        """Perform exact matching using selected algorithm"""
+        results = []
+        found_keywords = set()
+        keywords = [k.strip() for k in self.keywords.split(',')]
+        
+        for resume in all_resumes:
+            search_text = resume.get('content', '') or resume.get('extracted_text', '')
+            if not search_text:
+                continue
+            
+            total_matches = 0
+            skill_matches = {}
+            
+            for keyword in keywords:
+                # Use selected algorithm for exact matching
+                if self.method == "KMP":
+                    from src.core.matcher import kmp_search
+                    matches = kmp_search(search_text, keyword)
+                elif self.method == "BM":
+                    from src.core.matcher import bm_search
+                    matches = bm_search(search_text, keyword)
+                elif self.method == "AC":
+                    from src.core.matcher import ac_search
+                    matches = ac_search(search_text, [keyword])
+                    matches = [pos for pos, _ in matches]  # Extract positions only
+                else:
+                    matches = []
+                
+                if matches:
+                    total_matches += len(matches)
+                    skill_matches[keyword] = len(matches)
+                    found_keywords.add(keyword)
+            
+            if total_matches > 0:
+                results.append({
+                    'name': resume['filename'].replace('.pdf', ''),
+                    'matches': total_matches,
+                    'skills': skill_matches,
+                    'resume_id': resume['id'],
+                    'match_type': 'exact'
+                })
+        
+        return results, found_keywords
+    
+    def perform_fuzzy_search(self, all_resumes, missing_keywords):
+        """Perform fuzzy matching using Levenshtein Distance"""
+        results = []
+        
+        for resume in all_resumes:
+            search_text = resume.get('content', '') or resume.get('extracted_text', '')
+            if not search_text:
+                continue
+            
+            total_fuzzy_matches = 0
+            fuzzy_skill_matches = {}
+            
+            for keyword in missing_keywords:
+                # Use fuzzywuzzy for similarity matching
+                from src.core.matcher import fuzzy_search
+                fuzzy_matches = fuzzy_search(search_text, keyword, threshold=60)
+                
+                if fuzzy_matches:
+                    # Count high-similarity matches
+                    high_sim_matches = [m for m in fuzzy_matches if m[2] >= 70]
+                    if high_sim_matches:
+                        total_fuzzy_matches += len(high_sim_matches)
+                        fuzzy_skill_matches[f"{keyword} (fuzzy)"] = len(high_sim_matches)
+            
+            if total_fuzzy_matches > 0:
+                results.append({
+                    'name': resume['filename'].replace('.pdf', ''),
+                    'matches': total_fuzzy_matches,
+                    'skills': fuzzy_skill_matches,
+                    'resume_id': resume['id'],
+                    'match_type': 'fuzzy'
+                })
+        
+        return results
+    
+    def combine_results(self, exact_results, fuzzy_results):
+        """Combine exact and fuzzy results, avoiding duplicates"""
+        # Create dict to track resumes by ID
+        combined = {}
+        
+        # Add exact results first (higher priority)
+        for result in exact_results:
+            resume_id = result['resume_id']
+            combined[resume_id] = result
+        
+        # Add fuzzy results for resumes not in exact results
+        for result in fuzzy_results:
+            resume_id = result['resume_id']
+            if resume_id in combined:
+                # Merge fuzzy skills with exact skills
+                combined[resume_id]['skills'].update(result['skills'])
+                combined[resume_id]['matches'] += result['matches']
+                combined[resume_id]['match_type'] = 'both'
+            else:
+                combined[resume_id] = result
+        
+        return list(combined.values())
     
     def search_with_kmp(self, db):
         # Get all resumes from database
@@ -219,15 +350,14 @@ class IntegratedLandingPage(BukitDuriApp):
         if hasattr(self, 'loading_dialog'):
             self.loading_dialog.close()
         
-        print(f"Search completed! Found {len(results)} results")  # Debug line
+        print(f"Search completed! Found {len(results)} results")
         
-        # Prepare search parameters to pass to home page
+        # Get search parameters
         line_edits = self.findChildren(QLineEdit)
         keywords = line_edits[0].text().strip() if line_edits else ""
         top_matches = int(line_edits[1].text() or "3") if len(line_edits) > 1 else 3
         
-        # Get selected method
-        method = "KMP"  # Default
+        method = "KMP"
         if self.kmp_btn.isChecked():
             method = "KMP"
         elif self.bm_btn.isChecked():
@@ -241,8 +371,13 @@ class IntegratedLandingPage(BukitDuriApp):
             'top_matches': top_matches
         }
         
-        # Create and show results window with search parameters
+        # Create results window with search parameters
         self.results_window = IntegratedHomePage(results, search_params)
+        
+        # Connect timing signal for landing page search too
+        if hasattr(self, 'search_worker'):
+            self.search_worker.timing_info.connect(self.results_window.update_timing_display)
+        
         self.results_window.show()
         self.close()
     
@@ -266,19 +401,49 @@ class IntegratedLandingPage(BukitDuriApp):
         method = self.method_dropdown.currentText()
         top_matches = int(self.top_input.text() or "3")
         
-        # Import SearchWorker
-        from main_gui import SearchWorker
+        try:
+            # Show loading
+            self.loading_dialog = QProgressDialog("Searching...", "Cancel", 0, 0, self)
+            self.loading_dialog.setWindowModality(Qt.WindowModal)
+            self.loading_dialog.show()
+            
+            # Create search worker
+            self.search_worker = SearchWorker(keywords, method, top_matches, "")
+            self.search_worker.results_ready.connect(self.update_search_results)
+            self.search_worker.timing_info.connect(self.update_timing_display)  # New connection
+            self.search_worker.error_occurred.connect(self.search_error)
+            self.search_worker.start()
+            
+        except Exception as e:
+            QMessageBox.critical(self, "Search Error", f"Could not start search: {str(e)}")
+
+    def update_timing_display(self, timing_data):
+        """Update timing information display"""
+        exact_time = timing_data.get('exact_time', 0)
+        fuzzy_time = timing_data.get('fuzzy_time', 0)
+        exact_count = timing_data.get('exact_count', 0)
+        fuzzy_count = timing_data.get('fuzzy_count', 0)
+        total_scanned = timing_data.get('total_scanned', 0)
+        missing_keywords = timing_data.get('missing_keywords', [])
         
-        # Show loading
-        self.loading_dialog = QProgressDialog("Searching...", "Cancel", 0, 0, self)
-        self.loading_dialog.setWindowModality(Qt.WindowModal)
-        self.loading_dialog.show()
+        # Update exact match timing
+        exact_text = f"Exact Match: {total_scanned} CVs scanned in {exact_time:.0f}ms"
+        if exact_count > 0:
+            exact_text += f" • {exact_count} results found"
+        self.exact_timing_label.setText(exact_text)
         
-        # Create search worker
-        self.search_worker = SearchWorker(keywords, method, top_matches, "")
-        self.search_worker.results_ready.connect(self.update_search_results)
-        self.search_worker.error_occurred.connect(self.search_error)
-        self.search_worker.start()
+        # Update fuzzy match timing
+        if fuzzy_time > 0:
+            fuzzy_text = f"Fuzzy Match: {total_scanned} CVs scanned in {fuzzy_time:.0f}ms"
+            if fuzzy_count > 0:
+                fuzzy_text += f" • {fuzzy_count} additional results"
+            if missing_keywords:
+                fuzzy_text += f" • Keywords: {', '.join(missing_keywords)}"
+            self.fuzzy_timing_label.setText(fuzzy_text)
+            self.fuzzy_timing_label.show()
+        else:
+            self.fuzzy_timing_label.setText("Fuzzy Match: Not needed (all keywords found)")
+            self.fuzzy_timing_label.show()
 
     def update_search_results(self, results):
         if hasattr(self, 'loading_dialog'):
@@ -309,7 +474,7 @@ class IntegratedLandingPage(BukitDuriApp):
 class IntegratedHomePage(SearchApp):
     def __init__(self, search_results=None, search_params=None):
         self.search_results = search_results or []
-        self.search_params = search_params or {}  # Store search parameters
+        self.search_params = search_params or {}
         super().__init__()
         
         # Convert search results to consistent format
@@ -340,10 +505,95 @@ class IntegratedHomePage(SearchApp):
         
         if hasattr(self, 'top_input') and self.search_params.get('top_matches'):
             self.top_input.setText(str(self.search_params['top_matches']))
+
+    def update_timing_display(self, timing_data):
+        """Update timing information display"""
+        exact_time = timing_data.get('exact_time', 0)
+        fuzzy_time = timing_data.get('fuzzy_time', 0)
+        exact_count = timing_data.get('exact_count', 0)
+        fuzzy_count = timing_data.get('fuzzy_count', 0)
+        total_scanned = timing_data.get('total_scanned', 0)
+        missing_keywords = timing_data.get('missing_keywords', [])
+        
+        # Update exact match timing (only if timing labels exist)
+        if hasattr(self, 'exact_timing_label'):
+            exact_text = f"Exact Match: {total_scanned} CVs scanned in {exact_time:.0f}ms"
+            if exact_count > 0:
+                exact_text += f" • {exact_count} results found"
+            self.exact_timing_label.setText(exact_text)
+        
+        # Update fuzzy match timing
+        if hasattr(self, 'fuzzy_timing_label'):
+            if fuzzy_time > 0:
+                fuzzy_text = f"Fuzzy Match: {total_scanned} CVs scanned in {fuzzy_time:.0f}ms"
+                if fuzzy_count > 0:
+                    fuzzy_text += f" • {fuzzy_count} additional results"
+                if missing_keywords:
+                    fuzzy_text += f" • Keywords: {', '.join(missing_keywords)}"
+                self.fuzzy_timing_label.setText(fuzzy_text)
+                self.fuzzy_timing_label.show()
+            else:
+                self.fuzzy_timing_label.setText("Fuzzy Match: Not needed (all keywords found)")
+                self.fuzzy_timing_label.show()
+
+    def perform_new_search(self):
+        keywords = self.keyword_input.text().strip()
+        if not keywords:
+            QMessageBox.warning(self, "Warning", "Please enter keywords!")
+            return
+        
+        method = self.method_dropdown.currentText()
+        top_matches = int(self.top_input.text() or "3")
+        
+        try:
+            # Show loading
+            self.loading_dialog = QProgressDialog("Searching...", "Cancel", 0, 0, self)
+            self.loading_dialog.setWindowModality(Qt.WindowModal)
+            self.loading_dialog.show()
+            
+            # Create search worker
+            self.search_worker = SearchWorker(keywords, method, top_matches, "")
+            self.search_worker.results_ready.connect(self.update_search_results)
+            self.search_worker.timing_info.connect(self.update_timing_display)  # This will now work
+            self.search_worker.error_occurred.connect(self.search_error)
+            self.search_worker.start()
+            
+        except Exception as e:
+            QMessageBox.critical(self, "Search Error", f"Could not start search: {str(e)}")
+
+    def update_search_results(self, results):
+        if hasattr(self, 'loading_dialog'):
+            self.loading_dialog.close()
+        
+        # Update data
+        self.search_results = results
+        self.cv_data = []
+        for result in results:
+            self.cv_data.append({
+                'name': result['name'],
+                'matches': result['matches'],
+                'skills': result['skills'],
+                'resume_id': result['resume_id']
+            })
+        
+        self.current_page = 0
+        self.updateCards()
+        
+        # Update results count
+        if hasattr(self, 'results_label'):
+            self.results_label.setText(f"Found {len(self.cv_data)} resumes")
+
+    def search_error(self, error_msg):
+        if hasattr(self, 'loading_dialog'):
+            self.loading_dialog.close()
+        QMessageBox.critical(self, "Search Error", f"Error: {error_msg}")
     
     def setupTopBar(self):
-        top_layout = QHBoxLayout()
-        top_layout.setSpacing(15)
+        top_layout = QVBoxLayout()
+        
+        # First row - navigation and search
+        nav_search_layout = QHBoxLayout()
+        nav_search_layout.setSpacing(15)
         
         # Circular back button
         back_btn = QPushButton("‹")
@@ -362,7 +612,7 @@ class IntegratedHomePage(SearchApp):
         """)
         back_btn.clicked.connect(self.go_back_to_search)
         
-        # Search components
+        # Search components (same as before)
         method_label = QLabel("Method:")
         method_label.setStyleSheet("color: white; font-size: 14px;")
         
@@ -421,20 +671,52 @@ class IntegratedHomePage(SearchApp):
         """)
         self.search_btn.clicked.connect(self.perform_new_search)
         
-        # Layout
-        top_layout.addWidget(back_btn)
-        top_layout.addWidget(method_label)
-        top_layout.addWidget(self.method_dropdown)
-        top_layout.addWidget(top_label)
-        top_layout.addWidget(self.top_input)
-        top_layout.addWidget(self.keyword_input)
-        top_layout.addWidget(self.search_btn)
-        top_layout.addStretch()
+        # Layout first row
+        nav_search_layout.addWidget(back_btn)
+        nav_search_layout.addWidget(method_label)
+        nav_search_layout.addWidget(self.method_dropdown)
+        nav_search_layout.addWidget(top_label)
+        nav_search_layout.addWidget(self.top_input)
+        nav_search_layout.addWidget(self.keyword_input)
+        nav_search_layout.addWidget(self.search_btn)
+        nav_search_layout.addStretch()
         
-        # Results count on the right
+        # Results count
         self.results_label = QLabel(f"Found {len(self.cv_data)} resumes")
         self.results_label.setStyleSheet("color: white; font-size: 16px; font-weight: bold;")
-        top_layout.addWidget(self.results_label)
+        nav_search_layout.addWidget(self.results_label)
+        
+        # Second row - timing information
+        self.timing_layout = QHBoxLayout()
+        self.timing_layout.setSpacing(20)
+        
+        # Exact match timing
+        self.exact_timing_label = QLabel("")
+        self.exact_timing_label.setStyleSheet("""
+            color: #00FFC6; 
+            font-size: 12px; 
+            background-color: #1A3A35;
+            border-radius: 8px;
+            padding: 5px 10px;
+        """)
+        
+        # Fuzzy match timing
+        self.fuzzy_timing_label = QLabel("")
+        self.fuzzy_timing_label.setStyleSheet("""
+            color: #FFB366; 
+            font-size: 12px; 
+            background-color: #3A2A1A;
+            border-radius: 8px;
+            padding: 5px 10px;
+        """)
+        
+        self.timing_layout.addWidget(self.exact_timing_label)
+        self.timing_layout.addWidget(self.fuzzy_timing_label)
+        self.timing_layout.addStretch()
+        
+        # Add both rows to main layout
+        top_layout.addLayout(nav_search_layout)
+        top_layout.addLayout(self.timing_layout)
         
         self.main_layout.addLayout(top_layout)
         
