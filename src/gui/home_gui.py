@@ -2,13 +2,18 @@ import sys
 import subprocess
 import platform
 import os
-
-            
-from gui.summary_gui import SummaryPage
-from src.db.db_connector import DatabaseManager
 from PyQt5.QtWidgets import *
 from PyQt5.QtGui import QFont, QCursor, QIcon
 from PyQt5.QtCore import Qt, QSize
+
+# Add path for imports
+current_dir = os.path.dirname(os.path.abspath(__file__))
+parent_dir = os.path.dirname(current_dir)
+sys.path.append(parent_dir)
+
+# Import GUI components
+from gui.summary_gui import SummaryPage
+from src.db.db_connector import DatabaseManager
 
 class CVCard(QWidget):
     def __init__(self, name, matches, skills, resume_id=None):
@@ -223,17 +228,55 @@ class SearchApp(QWidget):
         method = self.method_dropdown.currentText()
         top_matches = int(self.top_input.text() or "3")
         
-        # Create search worker without password
-        self.search_worker = SearchWorker(keywords, method, top_matches, "")
-        self.search_worker.results_ready.connect(self.update_search_results)
-        self.search_worker.start()
+        # Fix import - import SearchWorker from main_gui
+        try:
+            current_dir = os.path.dirname(os.path.abspath(__file__))
+            parent_dir = os.path.dirname(current_dir)
+            sys.path.append(parent_dir)
+            
+            from main_gui import SearchWorker
+            
+            # Show loading
+            self.loading_dialog = QProgressDialog("Searching...", "Cancel", 0, 0, self)
+            self.loading_dialog.setWindowModality(Qt.WindowModal)
+            self.loading_dialog.show()
+            
+            # Create search worker
+            self.search_worker = SearchWorker(keywords, method, top_matches, "")
+            self.search_worker.results_ready.connect(self.update_search_results)
+            self.search_worker.error_occurred.connect(self.search_error)
+            self.search_worker.start()
+            
+        except Exception as e:
+            QMessageBox.critical(self, "Import Error", f"Could not import SearchWorker: {str(e)}")
+            print(f"SearchWorker import error: {e}")
 
     def update_search_results(self, results):
+        if hasattr(self, 'loading_dialog'):
+            self.loading_dialog.close()
+        
+        # Update data
         self.search_results = results
-        self.cv_data = [(result['name'], result['matches'], result['skills']) 
-                    for result in results]
+        self.cv_data = []
+        for result in results:
+            self.cv_data.append({
+                'name': result['name'],
+                'matches': result['matches'],
+                'skills': result['skills'],
+                'resume_id': result['resume_id']
+            })
+        
         self.current_page = 0
         self.updateCards()
+        
+        # Update results count if results_label exists
+        if hasattr(self, 'results_label'):
+            self.results_label.setText(f"Found {len(self.cv_data)} resumes")
+
+    def search_error(self, error_msg):
+        if hasattr(self, 'loading_dialog'):
+            self.loading_dialog.close()
+        QMessageBox.critical(self, "Search Error", f"Error: {error_msg}")
 
     def setupCardArea(self):
         self.scroll = QScrollArea()
