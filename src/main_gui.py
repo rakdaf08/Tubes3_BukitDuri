@@ -21,10 +21,10 @@ from src.core.matcher import kmp_search, bm_search, ac_search, fuzzy_search
 from src.db.db_connector import DatabaseManager
 
 class SearchWorker(QThread):
-    results_ready = pyqtSignal(list)  # Add this signal
-    error_occurred = pyqtSignal(str)  # Add this signal
+    results_ready = pyqtSignal(list)
+    error_occurred = pyqtSignal(str)
     
-    def __init__(self, keywords, method, top_matches, db_password="12345678"):
+    def __init__(self, keywords, method, top_matches, db_password="123"):
         super().__init__()
         self.keywords = keywords
         self.method = method
@@ -33,8 +33,8 @@ class SearchWorker(QThread):
     
     def run(self):
         try:
-            # Connect tanpa password
-            db = DatabaseManager(password="12345678")
+            # Connect to database with empty password
+            db = DatabaseManager(password="123")
             if not db.connect():
                 self.error_occurred.emit("Failed to connect to database")
                 return
@@ -69,9 +69,14 @@ class SearchWorker(QThread):
             total_matches = 0
             skill_matches = {}
             
-            # Search in resume text
+            # Search in resume content (extracted_text)
+            search_text = resume.get('content', '') or resume.get('extracted_text', '')
+            if not search_text:
+                continue
+                
             for keyword in keywords:
-                matches = kmp_search(resume['content'], keyword)
+                from src.core.matcher import kmp_search
+                matches = kmp_search(search_text, keyword)
                 if matches:
                     total_matches += len(matches)
                     skill_matches[keyword] = len(matches)
@@ -97,8 +102,13 @@ class SearchWorker(QThread):
             total_matches = 0
             skill_matches = {}
             
+            search_text = resume.get('content', '') or resume.get('extracted_text', '')
+            if not search_text:
+                continue
+            
             for keyword in keywords:
-                matches = bm_search(resume['content'], keyword)
+                from src.core.matcher import bm_search
+                matches = bm_search(search_text, keyword)
                 if matches:
                     total_matches += len(matches)
                     skill_matches[keyword] = len(matches)
@@ -121,7 +131,12 @@ class SearchWorker(QThread):
         keywords = [k.strip() for k in self.keywords.split(',')]
         
         for resume in all_resumes:
-            matches = ac_search(resume['content'], keywords)
+            search_text = resume.get('content', '') or resume.get('extracted_text', '')
+            if not search_text:
+                continue
+                
+            from src.core.matcher import ac_search
+            matches = ac_search(search_text, keywords)
             if matches:
                 total_matches = len(matches)
                 skill_matches = {}
@@ -140,6 +155,7 @@ class SearchWorker(QThread):
                 })
         
         return sorted(results, key=lambda x: x['matches'], reverse=True)
+
 
 class IntegratedLandingPage(BukitDuriApp):
     """Enhanced landing page with search functionality"""

@@ -95,37 +95,51 @@ class CVCard(QWidget):
             current_dir = os.path.dirname(os.path.abspath(__file__))
             sys.path.append(current_dir)
             
-            # Get real resume data
-            db = DatabaseManager(password="12345678")
+            # Get real resume data from database
+            db = DatabaseManager(password="123")
             if db.connect():
                 resume = db.get_resume_by_id(self.resume_id)
                 if resume:
+                    # Prepare comprehensive resume data for summary page
                     resume_data = {
                         'name': resume['filename'].replace('.pdf', ''),
-                        'skills': resume['skills'].split(', ') if resume['skills'] else [],
-                        'experience': resume['experience'],
-                        'education': resume['education'],
-                        'gpa': resume['gpa'],
-                        'certifications': resume['certifications'],
+                        'skills': resume['skills'] if resume['skills'] else 'No skills data available',
+                        'experience': resume['experience'] if resume['experience'] else '',
+                        'education': resume['education'] if resume['education'] else '',
+                        'gpa': resume['gpa'] if resume['gpa'] else None,
+                        'certifications': resume['certifications'] if resume['certifications'] else '',
+                        'category': resume.get('category', 'Unknown'),
                         'resume_id': self.resume_id,
-                        'file_path': resume['file_path']
+                        'file_path': resume['file_path'],
+                        'extracted_text': resume.get('extracted_text', '') or resume.get('content', ''),
+                        'created_at': resume.get('created_at', 'Unknown')
                     }
                     
+                    # Debug: Print what data we're sending
+                    print(f"DEBUG - Resume data being sent to summary:")
+                    print(f"Name: {resume_data['name']}")
+                    print(f"Skills: {resume_data['skills'][:100]}..." if len(str(resume_data['skills'])) > 100 else f"Skills: {resume_data['skills']}")
+                    print(f"Experience: {resume_data['experience'][:100]}..." if len(str(resume_data['experience'])) > 100 else f"Experience: {resume_data['experience']}")
+                    print(f"Education: {resume_data['education'][:100]}..." if len(str(resume_data['education'])) > 100 else f"Education: {resume_data['education']}")
+                    print(f"Has extracted_text: {bool(resume_data['extracted_text'])}")
+                    
+                    # Create and show summary page
                     self.summary_page = SummaryPage(resume_data)
                     self.summary_page.show()
                 else:
-                    QMessageBox.information(self, "Error", "Resume data not found")
+                    QMessageBox.information(self, "Error", "Resume data not found in database")
                 db.disconnect()
             else:
                 QMessageBox.critical(self, "Database Error", "Could not connect to database")
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Could not open summary: {str(e)}")
+            print(f"DEBUG - Error in view_more_clicked: {e}")  # Debug info
 
     def view_cv_clicked(self):
         try:
             # Get resume data from database
             from src.db.db_connector import DatabaseManager
-            db = DatabaseManager(password="12345678")
+            db = DatabaseManager(password="123")
             if db.connect():
                 resume = db.get_resume_by_id(self.resume_id)
                 if resume and resume['file_path']:
