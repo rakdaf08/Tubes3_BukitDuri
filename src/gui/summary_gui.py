@@ -13,7 +13,7 @@ class SummaryPage(QWidget):
         super().__init__()
         self.resume_data = resume_data or {}
         self.setWindowTitle("CV Summary")
-        self.setFixedSize(1280, 720)
+        self.setMinimumSize(1280, 720)
         self.setStyleSheet("background-color: #0B1917; color: white;")
         
         # Pagination variables
@@ -63,40 +63,37 @@ class SummaryPage(QWidget):
         # Candidate name
         self.create_candidate_name(layout)
         
-        # Skills section (full width with pagination)
-        self.create_skills_section(layout)
+        # Profile Information Box (Birthdate, Address, Phone, Applying for)
+        self.create_profile_info_box(layout)
         
-        # Overview/Summary section
-        self.create_overview_section(layout)
+        # Professional Overview section
+        self.create_professional_overview_section(layout)
         
-        # Experience and Education side by side
-        self.create_exp_edu_section(layout)
+        # Job History section (separate)
+        self.create_job_history_section(layout)
+        
+        # Education section (separate)
+        self.create_education_section(layout)
         
         layout.addStretch()
 
     def create_header(self, layout):
-        """Create header with back button"""
+        """Create header with back button same as home_gui"""
         header = QHBoxLayout()
         
-        back_btn = QPushButton("← Back to Results")
-        back_btn.setFixedSize(150, 45)
-        back_btn.setFont(QFont("Arial", 14, QFont.Bold))
-        back_btn.setCursor(QCursor(Qt.PointingHandCursor))
+        # Back button - same style as home_gui
+        back_btn = QPushButton("‹")
+        back_btn.setFixedSize(40, 40)
         back_btn.setStyleSheet("""
             QPushButton {
-                background-color: #037F68;
-                color: white;
-                border-radius: 10px;
+                background-color: #00FFC6;
+                border-radius: 20px;
+                color: black;
                 font-weight: bold;
-                border: 2px solid #037F68;
+                font-size: 24px;
             }
             QPushButton:hover {
-                background-color: #2BBA91;
-                border: 2px solid #2BBA91;
-                transform: translateY(-2px);
-            }
-            QPushButton:pressed {
-                background-color: #025A4A;
+                background-color: #00E6B8;
             }
         """)
         back_btn.clicked.connect(self.go_back)
@@ -106,25 +103,13 @@ class SummaryPage(QWidget):
         layout.addLayout(header)
 
     def create_candidate_name(self, layout):
-        """Create candidate name display with profile information"""
-        name_container = QWidget()
-        name_container.setStyleSheet("""
-            QWidget {
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, 
-                    stop:0 #037F68, stop:1 #2BBA91);
-                border-radius: 15px;
-                margin: 10px 0px;
-            }
-        """)
-        name_layout = QVBoxLayout(name_container)
-        name_layout.setContentsMargins(30, 20, 30, 20)
-        
-        # PRIORITIZED NAME DISPLAY
+        """Create candidate name display without background"""
+        # PRIORITIZED NAME DISPLAY with safe conversion
         display_name = "Unknown Candidate"
         
         # First try to get real name from profile
-        first_name = self.resume_data.get('first_name')
-        last_name = self.resume_data.get('last_name')
+        first_name = self.safe_str(self.resume_data.get('first_name'), "")
+        last_name = self.safe_str(self.resume_data.get('last_name'), "")
         
         if first_name and last_name:
             display_name = f"{first_name} {last_name}"
@@ -134,7 +119,7 @@ class SummaryPage(QWidget):
             display_name = last_name
         else:
             # Fallback to filename without .pdf and without numbers
-            filename = self.resume_data.get('filename', 'Unknown')
+            filename = self.safe_str(self.resume_data.get('filename', 'Unknown'))
             if filename.endswith('.pdf'):
                 filename = filename[:-4]
             
@@ -144,180 +129,140 @@ class SummaryPage(QWidget):
             else:
                 display_name = filename
         
+        # Simple name label without background
         name_label = QLabel(display_name)
         name_label.setFont(QFont("Arial", 42, QFont.Bold))
-        name_label.setStyleSheet("color: white; background: transparent;")
+        name_label.setStyleSheet("color: #34BD95; margin: 20px 0px;")  # Changed color, removed background
         name_label.setAlignment(Qt.AlignCenter)
-        name_layout.addWidget(name_label)
-        
-        # Profile information section
-        profile_info_layout = QHBoxLayout()
-        profile_info_layout.setSpacing(40)
-        
-        # Left column - Personal Info
-        left_info = QVBoxLayout()
-        left_info.setSpacing(8)
-        
-        # Birth date
-        birth_date = self.resume_data.get('date_of_birth')
-        if birth_date:
-            birth_label = QLabel(f"Birthdate: {birth_date}")
-            birth_label.setFont(QFont("Arial", 14))
-            birth_label.setStyleSheet("color: white; background: transparent;")
-            left_info.addWidget(birth_label)
-        
-        # Address
-        address = self.resume_data.get('address')
-        if address:
-            address_label = QLabel(f"Address: {address}")
-            address_label.setFont(QFont("Arial", 14))
-            address_label.setStyleSheet("color: white; background: transparent;")
-            address_label.setWordWrap(True)
-            left_info.addWidget(address_label)
-        
-        # Right column - Contact & Role
-        right_info = QVBoxLayout()
-        right_info.setSpacing(8)
-        
-        # Phone number
-        phone = self.resume_data.get('phone_number')
-        if phone:
-            phone_label = QLabel(f"Phone: {phone}")
-            phone_label.setFont(QFont("Arial", 14))
-            phone_label.setStyleSheet("color: white; background: transparent;")
-            right_info.addWidget(phone_label)
-        
-        # Application role
-        role = self.resume_data.get('application_role')
-        if role:
-            role_label = QLabel(f"Applying for: {role}")
-            role_label.setFont(QFont("Arial", 14, QFont.Bold))
-            role_label.setStyleSheet("color: #FFE066; background: transparent;")
-            role_label.setWordWrap(True)
-            right_info.addWidget(role_label)
-        
-        # Show filename for debugging
-        filename = self.resume_data.get('filename')
-        if filename:
-            file_debug = QLabel(f"Source: {filename}")
-            file_debug.setFont(QFont("Arial", 12))
-            file_debug.setStyleSheet("color: #B0B0B0; background: transparent;")
-            right_info.addWidget(file_debug)
-        
-        # Add info columns to profile layout
-        if left_info.count() > 0 or right_info.count() > 0:
-            if left_info.count() > 0:
-                left_widget = QWidget()
-                left_widget.setLayout(left_info)
-                profile_info_layout.addWidget(left_widget)
-            
-            if right_info.count() > 0:
-                right_widget = QWidget()
-                right_widget.setLayout(right_info)
-                profile_info_layout.addWidget(right_widget)
-            
-            # Add spacing and profile info to main layout
-            name_layout.addSpacing(15)
-            name_layout.addLayout(profile_info_layout)
-        
-        layout.addWidget(name_container)
+        layout.addWidget(name_label)
 
-    def create_overview_section(self, layout):
-        """Create overview/summary section with enhanced profile info"""
-        overview_data = self.extract_overview()
+    def create_profile_info_box(self, layout):
+        """Create profile information box with proper sizes and spacing"""
+        # Create two side-by-side containers
+        profile_main_layout = QHBoxLayout()
+        profile_main_layout.setSpacing(20)
         
-        # Overview title
-        overview_title = QLabel("Professional Overview")
-        overview_title.setFont(QFont("Arial", 28, QFont.Bold))
-        overview_title.setStyleSheet("color: #00FFC6; margin: 20px 0px 15px 0px;")
-        overview_title.setAlignment(Qt.AlignCenter)
-        layout.addWidget(overview_title)
-
-        # Overview container
-        overview_container = QGroupBox()
-        overview_container.setStyleSheet("""
-            QGroupBox {
-                background-color: #1E4A42;
+        # Left container - Personal Info (bigger size again)
+        left_container = QWidget()
+        left_container.setFixedSize(530, 350)  # Increased height from 320 to 350
+        left_container.setStyleSheet("""
+            QWidget {
+                background-color: #037F68;
                 border-radius: 15px;
-                border: 2px solid #037F68;
                 padding: 20px;
             }
         """)
-        overview_layout = QVBoxLayout(overview_container)
-        overview_layout.setContentsMargins(25, 25, 25, 25)
+        left_layout = QVBoxLayout(left_container)
+        left_layout.setContentsMargins(25, 30, 25, 30)  # Increased top/bottom margins
+        left_layout.setSpacing(15)  # Increased spacing between sections
+        
+        # Birth date
+        birth_date = self.resume_data.get('date_of_birth', '05-19-2025')
+        if hasattr(birth_date, 'strftime'):
+            birth_date = birth_date.strftime('%m-%d-%Y')
+        elif birth_date is None:
+            birth_date = 'Not specified'
+        else:
+            birth_date = str(birth_date)
+        
+        birth_label = QLabel("Birthdate")
+        birth_label.setFont(QFont("Arial", 24, QFont.Bold))
+        birth_label.setStyleSheet("color: white; background: transparent; margin: 0px; padding: 3px 0px;")
+        birth_value = QLabel(birth_date)
+        birth_value.setFont(QFont("Arial", 20))
+        birth_value.setStyleSheet("color: white; background: transparent; margin: 0px; padding: 3px 0px 8px 0px;")  # More padding
+        birth_value.setMinimumHeight(30)  # Ensure minimum height
+        left_layout.addWidget(birth_label)
+        left_layout.addWidget(birth_value)
+        
+        # Address
+        address = self.resume_data.get('address', 'Mesjid Salman ITB')
+        address = str(address) if address is not None else 'Address not specified'
+        
+        address_label = QLabel("Address")
+        address_label.setFont(QFont("Arial", 24, QFont.Bold))
+        address_label.setStyleSheet("color: white; background: transparent; margin: 0px; padding: 3px 0px;")
+        address_value = QLabel(address)
+        address_value.setFont(QFont("Arial", 20))
+        address_value.setStyleSheet("color: white; background: transparent; margin: 0px; padding: 3px 0px 8px 0px;")  # More padding
+        address_value.setWordWrap(True)
+        address_value.setMinimumHeight(30)  # Ensure minimum height
+        left_layout.addWidget(address_label)
+        left_layout.addWidget(address_value)
+        
+        # Phone number
+        phone = self.resume_data.get('phone_number', '+6281031231940')
+        phone = str(phone) if phone is not None else 'Phone not specified'
+        
+        phone_label = QLabel("Phone")
+        phone_label.setFont(QFont("Arial", 24, QFont.Bold))
+        phone_label.setStyleSheet("color: white; background: transparent; margin: 0px; padding: 3px 0px;")
+        phone_value = QLabel(phone)
+        phone_value.setFont(QFont("Arial", 20))
+        phone_value.setStyleSheet("color: white; background: transparent; margin: 0px; padding: 3px 0px 8px 0px;")  # More padding
+        phone_value.setMinimumHeight(30)  # Ensure minimum height
+        left_layout.addWidget(phone_label)
+        left_layout.addWidget(phone_value)
+        
+        # Applying for
+        role = self.resume_data.get('application_role', 'Software Engineer')
+        role = str(role) if role is not None else 'Role not specified'
+        
+        role_label = QLabel("Applying for")
+        role_label.setFont(QFont("Arial", 24, QFont.Bold))
+        role_label.setStyleSheet("color: white; background: transparent; margin: 0px; padding: 3px 0px;")
+        role_value = QLabel(role)
+        role_value.setFont(QFont("Arial", 20))
+        role_value.setStyleSheet("color: #FFE066; background: transparent; font-weight: bold; margin: 0px; padding: 3px 0px;")
+        role_value.setWordWrap(True)
+        role_value.setMinimumHeight(30)  # Ensure minimum height
+        left_layout.addWidget(role_label)
+        left_layout.addWidget(role_value)
 
-        # Add profile summary at the top if we have profile data
-        if any([self.resume_data.get('first_name'), self.resume_data.get('application_role')]):
-            profile_summary_layout = QHBoxLayout()
-            profile_summary_layout.setSpacing(30)
-            
-            # Basic info
-            basic_info = QVBoxLayout()
-            
-            if self.resume_data.get('first_name') or self.resume_data.get('last_name'):
-                full_name = f"{self.resume_data.get('first_name', '')} {self.resume_data.get('last_name', '')}".strip()
-                name_info = QLabel(f"Full Name: {full_name}")
-                name_info.setStyleSheet("color: #00FFC6; font-size: 14px; font-weight: bold;")
-                basic_info.addWidget(name_info)
-            
-            if self.resume_data.get('application_role'):
-                role_info = QLabel(f"Target Role: {self.resume_data.get('application_role')}")
-                role_info.setStyleSheet("color: #FFE066; font-size: 14px; font-weight: bold;")
-                basic_info.addWidget(role_info)
-            
-            # File info
-            file_info = QVBoxLayout()
-            
-            if self.resume_data.get('filename'):
-                filename_info = QLabel(f"Source: {self.resume_data.get('filename')}")
-                filename_info.setStyleSheet("color: #B0B0B0; font-size: 12px;")
-                file_info.addWidget(filename_info)
-            
-            if self.resume_data.get('category'):
-                category_info = QLabel(f"Category: {self.resume_data.get('category')}")
-                category_info.setStyleSheet("color: #B0B0B0; font-size: 12px;")
-                file_info.addWidget(category_info)
-            
-            # Add to profile summary
-            if basic_info.count() > 0:
-                basic_widget = QWidget()
-                basic_widget.setLayout(basic_info)
-                profile_summary_layout.addWidget(basic_widget)
-            
-            if file_info.count() > 0:
-                file_widget = QWidget()
-                file_widget.setLayout(file_info)
-                profile_summary_layout.addWidget(file_widget)
-            
-            profile_summary_layout.addStretch()
-            
-            # Add profile summary to overview
-            if profile_summary_layout.count() > 1:  # More than just stretch
-                overview_layout.addLayout(profile_summary_layout)
-                
-                # Add separator
-                separator = QLabel("─" * 50)
-                separator.setStyleSheet("color: #037F68; margin: 15px 0px;")
-                separator.setAlignment(Qt.AlignCenter)
-                overview_layout.addWidget(separator)
-
-        # Overview text with white color
-        overview_text = QLabel(overview_data)
-        overview_text.setStyleSheet("""
-            QLabel {
-                color: white;
-                font-size: 16px;
-                line-height: 28px;
-                background: transparent;
-                padding: 15px;
-                font-weight: 400;
-            }
-        """)
-        overview_text.setWordWrap(True)
-        overview_text.setAlignment(Qt.AlignLeft)
-        overview_layout.addWidget(overview_text)
-
-        layout.addWidget(overview_container)
+        # Right section - Skills with VERTICAL CENTER alignment
+        right_layout = QVBoxLayout()
+        right_layout.setSpacing(10)
+        
+        # Add stretch at top to center vertically
+        right_layout.addStretch()
+        
+        # Skills title - BOLD and centered vertically with profile info
+        skills_title = QLabel("Skills")
+        skills_title.setFont(QFont("Arial", 24, QFont.Bold))  # Added Bold
+        skills_title.setStyleSheet("color: white; background: transparent;")
+        skills_title.setAlignment(Qt.AlignCenter)
+        right_layout.addWidget(skills_title)
+        
+        # Create skills container and use existing update_skills_display
+        self.skills_container_profile = QWidget()
+        self.skills_layout_profile = QVBoxLayout(self.skills_container_profile)
+        self.skills_layout_profile.setContentsMargins(0, 0, 0, 0)
+        self.skills_layout_profile.setSpacing(8)
+        
+        # Update skills display using existing function (modified)
+        self.update_skills_display_for_profile()
+        
+        right_layout.addWidget(self.skills_container_profile)
+        
+        # Add stretch at bottom to center vertically
+        right_layout.addStretch()
+        
+        # Add to main layout
+        profile_main_layout.addWidget(left_container)
+        profile_main_layout.addLayout(right_layout)
+        
+        layout.addLayout(profile_main_layout)
+    
+    def safe_str(self, value, default="Not specified"):
+        """Safely convert any value to string for display"""
+        if value is None:
+            return default
+        elif hasattr(value, 'strftime'):  # datetime objects
+            return value.strftime('%m-%d-%Y')
+        elif hasattr(value, 'date'):  # datetime.datetime objects
+            return value.date().strftime('%m-%d-%Y')
+        else:
+            return str(value)
 
     def create_skills_section(self, layout):
         """Create skills section with pagination"""
@@ -351,6 +296,46 @@ class SummaryPage(QWidget):
         
         layout.addWidget(self.skills_container)
 
+    def create_professional_overview_section(self, layout):
+        """Create professional overview section above job history"""
+        overview_title = QLabel("Professional Overview")
+        overview_title.setFont(QFont("Arial", 28, QFont.Bold))
+        overview_title.setStyleSheet("color: #00FFC6; margin: 20px 0px 15px 0px;")
+        overview_title.setAlignment(Qt.AlignCenter)
+        layout.addWidget(overview_title)
+
+        # Overview container
+        overview_container = QGroupBox()
+        overview_container.setStyleSheet("""
+            QGroupBox {
+                background-color: #1E4A42;
+                border-radius: 15px;
+                border: 2px solid #037F68;
+                padding: 20px;
+            }
+        """)
+        overview_layout = QVBoxLayout(overview_container)
+        overview_layout.setContentsMargins(25, 25, 25, 25)
+
+        # Overview text
+        overview_data = self.extract_overview()
+        overview_text = QLabel(overview_data)
+        overview_text.setStyleSheet("""
+            QLabel {
+                color: white;
+                font-size: 16px;
+                line-height: 28px;
+                background: transparent;
+                padding: 15px;
+                font-weight: 400;
+            }
+        """)
+        overview_text.setWordWrap(True)
+        overview_text.setAlignment(Qt.AlignLeft)
+        overview_layout.addWidget(overview_text)
+
+        layout.addWidget(overview_container)
+
     def clear_layout(self, layout):
         """Safely clear all widgets from a layout"""
         while layout.count():
@@ -359,179 +344,377 @@ class SummaryPage(QWidget):
                 child.widget().deleteLater()
             elif child.layout():
                 self.clear_layout(child.layout())
-
-    def update_skills_display(self, all_skills):
-        """Update skills display with current page"""
-        # Clear existing layout safely
-        self.clear_layout(self.skills_layout)
-
-        # Calculate pagination
-        start_idx = self.skills_page * self.skills_per_page
-        end_idx = start_idx + self.skills_per_page
+                
+    def update_skills_display_for_profile(self):
+        """Update skills display for profile section with wider buttons"""
+        # Clear existing layout
+        self.clear_layout(self.skills_layout_profile)
+        
+        # Get all skills
+        all_skills = self.extract_skills_from_data()
+        
+        # Remove dummy HTML skills if we have real skills
+        if len(all_skills) > 1 and "No skills data available" not in all_skills:
+            all_skills = [skill for skill in all_skills if skill != "HTML"]
+        
+        # Calculate pagination (9 skills per page for 3x3 grid)
+        skills_per_page = 9
+        start_idx = self.skills_page * skills_per_page
+        end_idx = start_idx + skills_per_page
         current_skills = all_skills[start_idx:end_idx]
-
-        # Create grid for skills
-        skills_grid = QGridLayout()
-        skills_grid.setSpacing(12)
+        
+        # Create 3x3 grid for current skills
+        skills_grid_widget = QWidget()
+        skills_grid_layout = QGridLayout(skills_grid_widget)
+        skills_grid_layout.setSpacing(8)
+        skills_grid_layout.setContentsMargins(0, 0, 0, 0)
         
         for i, skill in enumerate(current_skills):
-            skill_btn = QPushButton(skill)
-            skill_btn.setFixedHeight(40)
+            # Truncate skill text if too long - INCREASED max_chars
+            truncated_skill = self.truncate_skill_text(skill, max_chars=25)  # Increased from 15 to 25
+            
+            skill_btn = QPushButton(truncated_skill)
+            skill_btn.setFixedHeight(35)  # Single line height
+            skill_btn.setFixedWidth(180)  # INCREASED width from 120 to 180
             skill_btn.setStyleSheet("""
                 QPushButton {
                     background-color: #037F68;
                     color: white;
-                    border-radius: 8px;
-                    font-size: 13px;
+                    border-radius: 6px;
+                    font-size: 12px;
                     font-weight: bold;
-                    padding: 8px 15px;
+                    padding: 6px 8px;
                     border: 1px solid #2BBA91;
+                    text-align: center;
                 }
                 QPushButton:hover {
                     background-color: #2BBA91;
-                    transform: translateY(-1px);
                 }
             """)
-            row = i // 4
-            col = i % 4
-            skills_grid.addWidget(skill_btn, row, col)
+            
+            row = i // 3
+            col = i % 3
+            skills_grid_layout.addWidget(skill_btn, row, col)
         
-        self.skills_layout.addLayout(skills_grid)
+        self.skills_layout_profile.addWidget(skills_grid_widget)
         
-        # Navigation buttons
-        nav_layout = QHBoxLayout()
-        
-        # Previous button
-        prev_btn = QPushButton("← Previous")
-        prev_btn.setEnabled(self.skills_page > 0)
-        prev_btn.setFixedSize(100, 35)
-        prev_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #037F68;
-                color: white;
-                border-radius: 8px;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: #2BBA91;
-            }
-            QPushButton:disabled {
-                background-color: #555555;
-                color: #888888;
-            }
-        """)
-        prev_btn.clicked.connect(lambda: self.change_skills_page(-1, all_skills))
-        
-        # Page info
-        total_pages = (len(all_skills) - 1) // self.skills_per_page + 1 if len(all_skills) > 0 else 1
-        page_info = QLabel(f"Page {self.skills_page + 1} of {total_pages} • Showing {len(current_skills)} of {len(all_skills)} skills")
-        page_info.setStyleSheet("color: #00FFC6; font-size: 12px;")
-        page_info.setAlignment(Qt.AlignCenter)
-        
-        # Next button
-        next_btn = QPushButton("Next →")
-        next_btn.setEnabled(end_idx < len(all_skills))
-        next_btn.setFixedSize(100, 35)
-        next_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #037F68;
-                color: white;
-                border-radius: 8px;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: #2BBA91;
-            }
-            QPushButton:disabled {
-                background-color: #555555;
-                color: #888888;
-            }
-        """)
-        next_btn.clicked.connect(lambda: self.change_skills_page(1, all_skills))
-        
-        nav_layout.addWidget(prev_btn)
-        nav_layout.addStretch()
-        nav_layout.addWidget(page_info)
-        nav_layout.addStretch()
-        nav_layout.addWidget(next_btn)
-        
-        self.skills_layout.addLayout(nav_layout)
+        # Add pagination if needed - COMPACT SPACING
+        if len(all_skills) > skills_per_page:
+            nav_layout = QHBoxLayout()
+            nav_layout.setSpacing(5)  # Very tight spacing
+            nav_layout.setAlignment(Qt.AlignCenter)
+            
+            prev_btn = QPushButton("←")
+            prev_btn.setEnabled(self.skills_page > 0)
+            prev_btn.setFixedSize(25, 25)  # Smaller buttons
+            prev_btn.clicked.connect(lambda: self.change_profile_skills_page(-1))
+            prev_btn.setStyleSheet("""
+                QPushButton {
+                    background-color: #037F68;
+                    color: white;
+                    border-radius: 12px;
+                    font-weight: bold;
+                    font-size: 14px;
+                }
+                QPushButton:hover { background-color: #2BBA91; }
+                QPushButton:disabled { background-color: #555555; }
+            """)
+            
+            total_pages = (len(all_skills) - 1) // skills_per_page + 1
+            page_info = QLabel(f"{self.skills_page + 1}/{total_pages}")
+            page_info.setStyleSheet("color: white; font-size: 11px;")
+            page_info.setAlignment(Qt.AlignCenter)
+            
+            next_btn = QPushButton("→")
+            next_btn.setEnabled(end_idx < len(all_skills))
+            next_btn.setFixedSize(25, 25)  # Smaller buttons
+            next_btn.clicked.connect(lambda: self.change_profile_skills_page(1))
+            next_btn.setStyleSheet("""
+                QPushButton {
+                    background-color: #037F68;
+                    color: white;
+                    border-radius: 12px;
+                    font-weight: bold;
+                    font-size: 14px;
+                }
+                QPushButton:hover { background-color: #2BBA91; }
+                QPushButton:disabled { background-color: #555555; }
+            """)
+            
+            nav_layout.addWidget(prev_btn)
+            nav_layout.addWidget(page_info)
+            nav_layout.addWidget(next_btn)
+            
+            self.skills_layout_profile.addLayout(nav_layout)
 
-    def change_skills_page(self, direction, all_skills):
-        """Change skills page"""
+    def truncate_skill_text(self, text, max_chars=25):  # Updated default to 25
+        """Truncate skill text for single line display"""
+        if len(text) <= max_chars:
+            return text
+        
+        # Simple truncation for single line
+        return text[:max_chars-3] + "..."
+
+    def change_profile_skills_page(self, direction):
+        """Change profile skills page"""
         self.skills_page += direction
-        self.update_skills_display(all_skills)
+        self.update_skills_display_for_profile()
 
-    def create_exp_edu_section(self, layout):
-        """Create experience and education sections side by side with pagination"""
-        exp_edu_layout = QHBoxLayout()
-        exp_edu_layout.setSpacing(30)
-
-        # Experience section
-        exp_container = self.create_experience_container()
-        exp_edu_layout.addWidget(exp_container)
-
-        # Education section
-        edu_container = self.create_education_container()
-        exp_edu_layout.addWidget(edu_container)
-
-        layout.addLayout(exp_edu_layout)
-
-    def create_experience_container(self):
-        """Create work experience container with pagination"""
-        exp_main_container = QWidget()
-        exp_main_layout = QVBoxLayout(exp_main_container)
-        exp_main_layout.setSpacing(15)
-
-        # Experience title
-        exp_title = QLabel("Work Experience")
-        exp_title.setFont(QFont("Arial", 24, QFont.Bold))
-        exp_title.setStyleSheet("color: #00FFC6; margin-bottom: 10px;")
-        exp_title.setAlignment(Qt.AlignCenter)
-        exp_main_layout.addWidget(exp_title)
-
-        # Container for dynamic content
-        self.exp_content_container = QWidget()
-        self.exp_content_layout = QVBoxLayout(self.exp_content_container)
-        exp_main_layout.addWidget(self.exp_content_container)
-
-        # Update experience display
-        self.update_experience_display()
-
-        return exp_main_container
-
-    def change_experience_page(self, direction):
-        """Change experience page"""
-        self.experience_page += direction
-        self.update_experience_display()
-
-    def create_education_container(self):
-        """Create education container with pagination"""
-        edu_main_container = QWidget()
-        edu_main_layout = QVBoxLayout(edu_main_container)
-        edu_main_layout.setSpacing(15)
-
+    def create_education_section(self, layout):
+        """Create education section like Professional Overview"""
         # Education title
         edu_title = QLabel("Education")
-        edu_title.setFont(QFont("Arial", 24, QFont.Bold))
-        edu_title.setStyleSheet("color: #00FFC6; margin-bottom: 10px;")
+        edu_title.setFont(QFont("Arial", 28, QFont.Bold))
+        edu_title.setStyleSheet("color: #00FFC6; margin: 20px 0px 15px 0px;")
         edu_title.setAlignment(Qt.AlignCenter)
-        edu_main_layout.addWidget(edu_title)
+        layout.addWidget(edu_title)
 
-        # Container for dynamic content
-        self.edu_content_container = QWidget()
-        self.edu_content_layout = QVBoxLayout(self.edu_content_container)
-        edu_main_layout.addWidget(self.edu_content_container)
+        # Education container
+        edu_container = QGroupBox()
+        edu_container.setStyleSheet("""
+            QGroupBox {
+                background-color: #1E4A42;
+                border-radius: 15px;
+                border: 2px solid #037F68;
+                padding: 20px;
+            }
+        """)
+        
+        self.edu_layout = QVBoxLayout(edu_container)
+        self.edu_layout.setContentsMargins(25, 25, 25, 25)
+        self.edu_layout.setSpacing(15)
 
         # Update education display
-        self.update_education_display()
+        self.update_education_display_new()
+        
+        layout.addWidget(edu_container)
 
-        return edu_main_container
+    def create_job_history_section(self, layout):
+        """Create job history section WITHOUT container"""
+        # Job History title
+        job_title = QLabel("Job History")
+        job_title.setFont(QFont("Arial", 28, QFont.Bold))
+        job_title.setStyleSheet("color: #00FFC6; margin: 20px 0px 15px 0px;")
+        job_title.setAlignment(Qt.AlignCenter)
+        layout.addWidget(job_title)
 
-    def change_education_page(self, direction):
-        """Change education page"""
-        self.education_page += direction
-        self.update_education_display()
+        # Job History layout (NO CONTAINER)
+        self.job_layout = QVBoxLayout()
+        self.job_layout.setSpacing(15)
+
+        # Update job history display
+        self.update_job_history_display()
+        
+        layout.addLayout(self.job_layout)  # Add layout directly, not container
+
+    def update_job_history_display(self):
+        """Update job history display with 2x2 grid layout"""
+        experience_data = self.extract_experience()
+        
+        if not experience_data:
+            placeholder_text = QLabel("Work experience details will be extracted from CV")
+            placeholder_text.setFont(QFont("Arial", 16))
+            placeholder_text.setStyleSheet("color: white; text-align: center;")
+            placeholder_text.setAlignment(Qt.AlignCenter)
+            self.job_layout.addWidget(placeholder_text)
+            return
+
+        # Calculate pagination (4 items per page for 2x2 grid)
+        items_per_page = 4
+        start_idx = self.experience_page * items_per_page
+        end_idx = start_idx + items_per_page
+        current_experiences = experience_data[start_idx:end_idx]
+
+        # Create 2x2 grid layout
+        grid_layout = QGridLayout()
+        grid_layout.setSpacing(20)
+        
+        for i, exp in enumerate(current_experiences):
+            # Create job box (530x150)
+            job_box = QWidget()
+            job_box.setFixedSize(530, 150)
+            job_box.setStyleSheet("""
+                QWidget {
+                    background-color: #A5C5BE;
+                    border-radius: 10px;
+                }
+            """)
+            
+            job_layout = QVBoxLayout(job_box)
+            job_layout.setContentsMargins(20, 15, 20, 15)
+            job_layout.setSpacing(5)
+            job_layout.setAlignment(Qt.AlignTop)
+            
+            # Position title (Bold, Size 24, Color #051010)
+            title_label = QLabel(exp.get('title', 'Position'))
+            title_label.setFont(QFont("Arial", 24, QFont.Bold))
+            title_label.setStyleSheet("color: #051010; background: transparent;")
+            title_label.setWordWrap(True)
+            job_layout.addWidget(title_label)
+            
+            # Company and period (Medium, Size 20, Color #051010)
+            company_period = f"{exp.get('company', 'Company')} • {exp.get('period', 'Period not specified')}"
+            company_label = QLabel(company_period)
+            company_label.setFont(QFont("Arial", 20, QFont.DemiBold))
+            company_label.setStyleSheet("color: #051010; background: transparent;")
+            company_label.setWordWrap(True)
+            job_layout.addWidget(company_label)
+            
+            # Description (Regular, Size 16, Color #051010)
+            desc_text = exp.get('description', 'Detailed responsibilities available in full CV.')
+            if len(desc_text) > 120:
+                desc_text = desc_text[:120] + "..."
+            
+            desc_label = QLabel(desc_text)
+            desc_label.setFont(QFont("Arial", 16))
+            desc_label.setStyleSheet("color: #051010; background: transparent; line-height: 20px;")
+            desc_label.setWordWrap(True)
+            job_layout.addWidget(desc_label)
+            
+            # Add to grid (2x2 layout)
+            row = i // 2
+            col = i % 2
+            grid_layout.addWidget(job_box, row, col)
+        
+        self.job_layout.addLayout(grid_layout)
+
+        # Compact Navigation (symbols only, close together)
+        if len(experience_data) > items_per_page:
+            nav_layout = QHBoxLayout()
+            nav_layout.setSpacing(8)  # Tight spacing
+            nav_layout.setAlignment(Qt.AlignCenter)
+            
+            prev_btn = QPushButton("←")  # Symbol only
+            prev_btn.setEnabled(self.experience_page > 0)
+            prev_btn.setFixedSize(30, 30)
+            prev_btn.clicked.connect(lambda: self.change_experience_page(-1))
+            prev_btn.setStyleSheet("""
+                QPushButton {
+                    background-color: #037F68;
+                    color: white;
+                    border-radius: 15px;
+                    font-weight: bold;
+                    font-size: 16px;
+                }
+                QPushButton:hover { background-color: #2BBA91; }
+                QPushButton:disabled { background-color: #555555; }
+            """)
+            
+            total_pages = (len(experience_data) - 1) // items_per_page + 1
+            page_info = QLabel(f"Page {self.experience_page + 1} of {total_pages}")
+            page_info.setStyleSheet("color: white; font-size: 14px;")  # No background
+            page_info.setAlignment(Qt.AlignCenter)
+            
+            next_btn = QPushButton("→")  # Symbol only
+            next_btn.setEnabled(end_idx < len(experience_data))
+            next_btn.setFixedSize(30, 30)
+            next_btn.clicked.connect(lambda: self.change_experience_page(1))
+            next_btn.setStyleSheet("""
+                QPushButton {
+                    background-color: #037F68;
+                    color: white;
+                    border-radius: 15px;
+                    font-weight: bold;
+                    font-size: 16px;
+                }
+                QPushButton:hover { background-color: #2BBA91; }
+                QPushButton:disabled { background-color: #555555; }
+            """)
+            
+            nav_layout.addWidget(prev_btn)
+            nav_layout.addWidget(page_info)
+            nav_layout.addWidget(next_btn)
+            
+            self.job_layout.addLayout(nav_layout)
+
+    def update_education_display_new(self):
+        """Update education display without item backgrounds"""
+        education_data = self.extract_education()
+        
+        if not education_data:
+            placeholder_text = QLabel("Education details will be extracted from CV")
+            placeholder_text.setFont(QFont("Arial", 16))
+            placeholder_text.setStyleSheet("color: white; background: transparent; text-align: center;")
+            placeholder_text.setAlignment(Qt.AlignCenter)
+            self.edu_layout.addWidget(placeholder_text)
+            return
+
+        # Calculate pagination
+        start_idx = self.education_page * self.items_per_page
+        end_idx = start_idx + self.items_per_page
+        current_education = education_data[start_idx:end_idx]
+
+        # Display education entries WITHOUT background containers
+        for edu in current_education:
+            # Degree with field - NO BACKGROUND
+            degree_text = edu.get('degree', 'Degree')
+            if edu.get('field', '') and edu.get('field', '').strip():
+                degree_text += f" in {edu.get('field', '')}"
+            
+            degree_label = QLabel(degree_text)
+            degree_label.setFont(QFont("Arial", 18, QFont.Bold))
+            degree_label.setStyleSheet("color: white; background: transparent; margin-bottom: 5px;")
+            degree_label.setWordWrap(True)
+            
+            # Institution and Year - NO BACKGROUND
+            institution_text = edu.get('institution', 'Institution')
+            if edu.get('date', '') and edu.get('date', '') != 'Year not specified':
+                institution_text += f" • {edu.get('date', '')}"
+            
+            info_label = QLabel(institution_text)
+            info_label.setFont(QFont("Arial", 14))
+            info_label.setStyleSheet("color: #00FFC6; background: transparent; margin-bottom: 20px;")
+            info_label.setWordWrap(True)
+            
+            self.edu_layout.addWidget(degree_label)
+            self.edu_layout.addWidget(info_label)
+
+        # Navigation
+        if len(education_data) > self.items_per_page:
+            nav_layout = QHBoxLayout()
+            
+            prev_btn = QPushButton("← Previous")
+            prev_btn.setEnabled(self.education_page > 0)
+            prev_btn.clicked.connect(lambda: self.change_education_page(-1))
+            prev_btn.setStyleSheet("""
+                QPushButton {
+                    background-color: #037F68;
+                    color: white;
+                    border-radius: 8px;
+                    padding: 8px 16px;
+                    font-weight: bold;
+                }
+                QPushButton:hover { background-color: #2BBA91; }
+                QPushButton:disabled { background-color: #555555; }
+            """)
+            
+            total_pages = (len(education_data) - 1) // self.items_per_page + 1
+            page_info = QLabel(f"Page {self.education_page + 1} of {total_pages}")
+            page_info.setStyleSheet("color: #00FFC6; font-size: 14px;")
+            page_info.setAlignment(Qt.AlignCenter)
+            
+            next_btn = QPushButton("Next →")
+            next_btn.setEnabled(end_idx < len(education_data))
+            next_btn.clicked.connect(lambda: self.change_education_page(1))
+            next_btn.setStyleSheet("""
+                QPushButton {
+                    background-color: #037F68;
+                    color: white;
+                    border-radius: 8px;
+                    padding: 8px 16px;
+                    font-weight: bold;
+                }
+                QPushButton:hover { background-color: #2BBA91; }
+                QPushButton:disabled { background-color: #555555; }
+            """)
+            
+            nav_layout.addWidget(prev_btn)
+            nav_layout.addStretch()
+            nav_layout.addWidget(page_info)
+            nav_layout.addStretch()
+            nav_layout.addWidget(next_btn)
+            
+            self.edu_layout.addLayout(nav_layout)
 
     def extract_skills_from_data(self):
         """Extract skills from database - improved parsing"""
@@ -575,6 +758,22 @@ class SummaryPage(QWidget):
                 clean_skills.append(skill)
         
         return clean_skills if clean_skills else ["No skills data available"]
+    
+    def change_experience_page(self, direction):
+        """Change experience page"""
+        self.experience_page += direction
+        # Clear existing layout safely
+        self.clear_layout(self.job_layout)
+        # Update display
+        self.update_job_history_display()
+
+    def change_education_page(self, direction):
+        """Change education page"""
+        self.education_page += direction
+        # Clear existing layout safely
+        self.clear_layout(self.edu_layout)
+        # Update display
+        self.update_education_display_new()
     
     def extract_experience(self):
         """Extract work experience - robust parsing for multiple CV formats"""
