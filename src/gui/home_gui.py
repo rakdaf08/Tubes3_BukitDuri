@@ -100,7 +100,7 @@ class CVCard(QWidget):
             current_dir = os.path.dirname(os.path.abspath(__file__))
             sys.path.append(current_dir)
             
-            db = DatabaseManager(password="123")
+            db = DatabaseManager(password="")
             if db.connect():
                 resume = db.get_resume_by_id(self.resume_id)
                 if resume:
@@ -158,7 +158,7 @@ class CVCard(QWidget):
         try:
             # Get resume data from database
             from src.db.db_connector import DatabaseManager
-            db = DatabaseManager(password="123")
+            db = DatabaseManager(password="")
             if db.connect():
                 resume = db.get_resume_by_id(self.resume_id)
                 if resume and resume['file_path']:
@@ -215,23 +215,140 @@ class SearchApp(QWidget):
         self.main_layout.setContentsMargins(30, 30, 30, 30)
         self.main_layout.setSpacing(20)
 
-        self.setupTopBar()
+        self.setupFilterBar()
         self.setupCardArea()
         self.setupPagination()
 
         self.setLayout(self.main_layout)
         self.updateCards()
 
-    def setupTopBar(self):
-        # Simplified version for base SearchApp
-        top_layout = QHBoxLayout()
-        
-        title = QLabel("CV Search Results")
-        title.setStyleSheet("color: white; font-size: 24px; font-weight: bold;")
-        top_layout.addWidget(title)
-        top_layout.addStretch()
-        
-        self.main_layout.addLayout(top_layout)
+    def setupFilterBar(self):
+        # Create filter bar with back button, method dropdown, number input, and search input
+        filter_layout = QHBoxLayout()
+        filter_layout.setAlignment(Qt.AlignCenter)
+        filter_layout.setSpacing(15)
+
+        # Back button
+        back_btn = QPushButton("<")
+        back_btn.setFixedSize(50, 40)
+        back_btn.setCursor(QCursor(Qt.PointingHandCursor))
+        back_btn.clicked.connect(self.go_back_to_landing)  # Add click handler
+        back_btn.setStyleSheet("""
+            QPushButton {
+                background-color: transparent;
+                border: none;
+                color: white;
+                font-size: 24px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                color: #00FFC6;
+            }
+        """)
+        filter_layout.addWidget(back_btn)
+
+        # Method dropdown (KMP, BM, etc.)
+        self.method_dropdown = QComboBox()
+        self.method_dropdown.addItems(["KMP", "BM", "AC"])
+        self.method_dropdown.setCurrentText("KMP")
+        self.method_dropdown.setFixedSize(80, 40)
+        self.method_dropdown.setCursor(QCursor(Qt.PointingHandCursor))
+        self.method_dropdown.setStyleSheet("""
+            QComboBox {
+                background-color: #00FFC6;
+                border: none;
+                border-radius: 20px;
+                color: black;
+                font-weight: bold;
+                font-size: 14px;
+                padding: 0 15px;
+            }
+            QComboBox:hover {
+                background-color: #00E6B8;
+            }
+            QComboBox::drop-down {
+                border: none;
+            }
+            QComboBox::down-arrow {
+                image: none;
+                border: none;
+            }
+            QComboBox QAbstractItemView {
+                background-color: #00FFC6;
+                color: black;
+                selection-background-color: #00E6B8;
+                border: none;
+                border-radius: 10px;
+            }
+        """)
+        filter_layout.addWidget(self.method_dropdown)
+
+        # Number input (top matches)
+        self.top_input = QLineEdit("3")
+        self.top_input.setFixedSize(60, 40)
+        self.top_input.setAlignment(Qt.AlignCenter)
+        self.top_input.setStyleSheet("""
+            QLineEdit {
+                background-color: #5A6563;
+                border: none;
+                border-radius: 20px;
+                color: white;
+                font-size: 14px;
+                font-weight: bold;
+            }
+        """)
+        filter_layout.addWidget(self.top_input)
+
+        # Search input field
+        self.keyword_input = QLineEdit("React, Express, HTML")
+        self.keyword_input.setFixedHeight(40)
+        self.keyword_input.setMinimumWidth(200)
+        self.keyword_input.setStyleSheet("""
+            QLineEdit {
+                background-color: #5A6563;
+                border: none;
+                border-radius: 20px;
+                color: white;
+                font-size: 14px;
+                padding: 0 20px;
+            }
+            QLineEdit:focus {
+                background-color: #6A7573;
+            }
+        """)
+        filter_layout.addWidget(self.keyword_input)
+
+        # Search button (green circle)
+        search_btn = QPushButton()
+        search_btn.setFixedSize(40, 40)
+        search_btn.setCursor(QCursor(Qt.PointingHandCursor))
+        search_btn.clicked.connect(self.perform_new_search)
+        search_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #00FFC6;
+                border: none;
+                border-radius: 20px;
+            }
+            QPushButton:hover {
+                background-color: #00E6B8;
+            }
+        """)
+        filter_layout.addWidget(search_btn)
+
+        self.main_layout.addLayout(filter_layout)
+
+    def go_back_to_landing(self):
+        """Handle back button click"""
+        try:
+            # If this is IntegratedHomePage, use its go_back_to_search method
+            if hasattr(self, 'go_back_to_search'):
+                self.go_back_to_search()
+            else:
+                # For standalone SearchApp, just close
+                self.close()
+        except Exception as e:
+            print(f"Error going back: {e}")
+            self.close()
 
     def perform_new_search(self):
         keywords = self.keyword_input.text().strip()
@@ -306,6 +423,52 @@ class SearchApp(QWidget):
         self.scroll.setWidget(self.content_widget)
         self.main_layout.addWidget(self.scroll)
 
+    def updateCards(self):
+        # Clear existing widgets
+        while self.grid.count():
+            child = self.grid.takeAt(0)
+            if child.widget():
+                child.widget().deleteLater()
+
+        start = self.current_page * self.items_per_page
+        end = start + self.items_per_page
+        current_items = self.cv_data[start:end]
+
+        for i, item_data in enumerate(current_items):
+            # Handle different data formats
+            if isinstance(item_data, dict):
+                # Format from search results
+                name = item_data.get('name', 'Unknown')
+                matches = item_data.get('matches', 0)
+                skills = item_data.get('skills', {})
+                resume_id = item_data.get('resume_id')
+            elif isinstance(item_data, tuple) and len(item_data) >= 3:
+                # Tuple format (name, matches, skills, resume_id)
+                name = item_data[0]
+                matches = item_data[1]
+                skills = item_data[2]
+                resume_id = item_data[3] if len(item_data) > 3 else None
+            else:
+                # Fallback
+                name = "Unknown"
+                matches = 0
+                skills = {}
+                resume_id = None
+            
+            card = CVCard(name, matches, skills, resume_id)
+            self.grid.addWidget(card, i // 3, i % 3)
+
+        # Update pagination info
+        if hasattr(self, 'page_label'):
+            total_pages = (len(self.cv_data) - 1) // self.items_per_page + 1 if self.cv_data else 1
+            self.page_label.setText(f"Page {self.current_page + 1} of {total_pages}")
+            
+            # Update button states
+            if hasattr(self, 'prev_btn'):
+                self.prev_btn.setEnabled(self.current_page > 0)
+            if hasattr(self, 'next_btn'):
+                self.next_btn.setEnabled(end < len(self.cv_data))
+
     def setupPagination(self):
         self.pagination_layout = QHBoxLayout()
         self.pagination_layout.setAlignment(Qt.AlignCenter)
@@ -364,53 +527,8 @@ class SearchApp(QWidget):
         self.pagination_layout.addWidget(self.next_btn)
 
         self.main_layout.addLayout(self.pagination_layout)
-
-    def updateCards(self):
-        # Clear existing widgets
-        while self.grid.count():
-            child = self.grid.takeAt(0)
-            if child.widget():
-                child.widget().deleteLater()
-
-        start = self.current_page * self.items_per_page
-        end = start + self.items_per_page
-        current_items = self.cv_data[start:end]
-
-        for i, item_data in enumerate(current_items):
-            # Handle different data formats
-            if isinstance(item_data, dict):
-                # Format from search results
-                name = item_data.get('name', 'Unknown')
-                matches = item_data.get('matches', 0)
-                skills = item_data.get('skills', {})
-                resume_id = item_data.get('resume_id')
-            elif isinstance(item_data, tuple) and len(item_data) >= 3:
-                # Tuple format (name, matches, skills, resume_id)
-                name = item_data[0]
-                matches = item_data[1]
-                skills = item_data[2]
-                resume_id = item_data[3] if len(item_data) > 3 else None
-            else:
-                # Fallback
-                name = "Unknown"
-                matches = 0
-                skills = {}
-                resume_id = None
-            
-            card = CVCard(name, matches, skills, resume_id)
-            self.grid.addWidget(card, i // 3, i % 3)
-
-        # Update pagination
-        total_pages = (len(self.cv_data) - 1) // self.items_per_page + 1 if self.cv_data else 1
-        self.page_label.setText(f"Page {self.current_page + 1} of {total_pages}")
         
-        self.prev_btn.setEnabled(self.current_page > 0)
-        self.next_btn.setEnabled(end < len(self.cv_data))
-
-    def goToPage(self, page):
-        if 0 <= page < (len(self.cv_data) - 1) // self.items_per_page + 1:
-            self.current_page = page
-            self.updateCards()
+        # Remove the problematic line with undefined 'page' variable
 
     def goToPrevPage(self):
         if self.current_page > 0:

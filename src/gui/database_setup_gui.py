@@ -65,7 +65,7 @@ class DatabaseSetupWorker(QThread):
                 temp_conn = mysql.connector.connect(
                     host='localhost',
                     user='root',
-                    password='123'
+                    password=''
                 )
                 cursor = temp_conn.cursor()
                 cursor.execute("DROP DATABASE IF EXISTS Tubes3Stima")
@@ -80,7 +80,7 @@ class DatabaseSetupWorker(QThread):
             db_config = {
                 'host': 'localhost',
                 'user': 'root',
-                'password': '123',
+                'password': '',
                 'database': 'Tubes3Stima',
             }
             
@@ -323,11 +323,10 @@ class DatabaseSetupGUI(QWidget):
         
         # Logo section
         logo_layout = QHBoxLayout()
-        title = QLabel("BUKIT DURI")
-        title.setFont(QFont("Arial", 32, QFont.Bold))
-        title.setStyleSheet("color: #00FFC6;")
-        title.setAlignment(Qt.AlignCenter)
-        logo_layout.addWidget(title)
+        logo_path = os.path.join(root_dir, "src", "gui", "logo_bukdur.svg")
+        logo = QSvgWidget(logo_path)
+        logo.setFixedSize(344, 179)  # Same size as landing
+        logo_layout.addWidget(logo, alignment=Qt.AlignCenter)
         
         layout.addLayout(logo_layout)
         

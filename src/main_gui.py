@@ -27,17 +27,17 @@ class SearchWorker(QThread):
     error_occurred = pyqtSignal(str)
     timing_info = pyqtSignal(dict)  # New signal for timing information
     
-    def __init__(self, keywords, method, top_matches, db_password="123"):
+    def __init__(self, keywords, method, top_matches, db_password=""):
         super().__init__()
         self.keywords = keywords
         self.method = method
         self.top_matches = top_matches
-        self.db_password = db_password
+        self.db_password = ""
     
     def run(self):
         try:
             # Connect to database
-            db = DatabaseManager(password="123")
+            db = DatabaseManager(password="")
             if not db.connect():
                 self.error_occurred.emit("Failed to connect to database")
                 return
@@ -889,7 +889,7 @@ class MainApplication(QApplication):
             temp_conn = mysql.connector.connect(
                 host='localhost',
                 user='root',
-                password='123'
+                password=''
             )
             cursor = temp_conn.cursor()
             
