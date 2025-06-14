@@ -27,7 +27,7 @@ class SearchWorker(QThread):
     error_occurred = pyqtSignal(str)
     timing_info = pyqtSignal(dict)  # New signal for timing information
     
-    def __init__(self, keywords, method, top_matches, db_password=""):
+    def __init__(self, keywords, method, top_matches, db_password="123"):
         super().__init__()
         self.keywords = keywords
         self.method = method
@@ -37,7 +37,7 @@ class SearchWorker(QThread):
     def run(self):
         try:
             # Connect to database
-            db = DatabaseManager(password="")
+            db = DatabaseManager(password="123")
             if not db.connect():
                 self.error_occurred.emit("Failed to connect to database")
                 return
@@ -111,7 +111,7 @@ class SearchWorker(QThread):
                 elif self.method == "AC":
                     from src.core.matcher import ac_search
                     matches = ac_search(search_text, [keyword])
-                    matches = [pos for pos, _ in matches]  # Extract positions only
+                    matches = [pos for pos, _ in matches]
                 else:
                     matches = []
                 
@@ -121,16 +121,31 @@ class SearchWorker(QThread):
                     found_keywords.add(keyword)
             
             if total_matches > 0:
+                # Use real name if available, otherwise filename
+                display_name = ""
+                if resume.get('first_name') and resume.get('last_name'):
+                    display_name = f"{resume['first_name']} {resume['last_name']}"
+                else:
+                    display_name = resume['filename'].replace('.pdf', '')
+                
                 results.append({
-                    'name': resume['filename'].replace('.pdf', ''),
+                    'name': display_name,
                     'matches': total_matches,
                     'skills': skill_matches,
                     'resume_id': resume['id'],
-                    'match_type': 'exact'
+                    'match_type': 'exact',
+                    'profile_data': {
+                        'first_name': resume.get('first_name'),
+                        'last_name': resume.get('last_name'),
+                        'application_role': resume.get('application_role'),
+                        'date_of_birth': resume.get('date_of_birth'),
+                        'address': resume.get('address'),
+                        'phone_number': resume.get('phone_number')
+                    }
                 })
         
         return results, found_keywords
-    
+
     def perform_fuzzy_search(self, all_resumes, missing_keywords):
         """Perform fuzzy matching using Levenshtein Distance"""
         results = []
@@ -144,24 +159,37 @@ class SearchWorker(QThread):
             fuzzy_skill_matches = {}
             
             for keyword in missing_keywords:
-                # Use fuzzywuzzy for similarity matching
                 from src.core.matcher import fuzzy_search
                 fuzzy_matches = fuzzy_search(search_text, keyword, threshold=60)
                 
                 if fuzzy_matches:
-                    # Count high-similarity matches
                     high_sim_matches = [m for m in fuzzy_matches if m[2] >= 70]
                     if high_sim_matches:
                         total_fuzzy_matches += len(high_sim_matches)
                         fuzzy_skill_matches[f"{keyword} (fuzzy)"] = len(high_sim_matches)
             
             if total_fuzzy_matches > 0:
+                # Use real name if available
+                display_name = ""
+                if resume.get('first_name') and resume.get('last_name'):
+                    display_name = f"{resume['first_name']} {resume['last_name']}"
+                else:
+                    display_name = resume['filename'].replace('.pdf', '')
+                
                 results.append({
-                    'name': resume['filename'].replace('.pdf', ''),
+                    'name': display_name,
                     'matches': total_fuzzy_matches,
                     'skills': fuzzy_skill_matches,
                     'resume_id': resume['id'],
-                    'match_type': 'fuzzy'
+                    'match_type': 'fuzzy',
+                    'profile_data': {
+                        'first_name': resume.get('first_name'),
+                        'last_name': resume.get('last_name'),
+                        'application_role': resume.get('application_role'),
+                        'date_of_birth': resume.get('date_of_birth'),
+                        'address': resume.get('address'),
+                        'phone_number': resume.get('phone_number')
+                    }
                 })
         
         return results
@@ -839,7 +867,7 @@ class MainApplication(QApplication):
             temp_conn = mysql.connector.connect(
                 host='localhost',
                 user='root',
-                password=''
+                password='123'
             )
             cursor = temp_conn.cursor()
             

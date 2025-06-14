@@ -2,7 +2,7 @@ import sys
 import os
 from PyQt5.QtWidgets import *
 from PyQt5.QtCore import Qt, QThread, pyqtSignal, QTimer
-from PyQt5.QtGui import QFont, QMovie, QPalette, QColor
+from PyQt5.QtGui import QFont
 
 # Fix import paths
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -18,9 +18,13 @@ try:
 except ImportError:
     print("QSvgWidget not available, using text fallback")
 
-# Now import with correct paths
-from db.db_connector import DatabaseManager
-from core.extractor import extract_text_from_pdf, extract_profile_data
+# Import database components
+try:
+    from db.db_connector import DatabaseManager
+    from core.extractor import extract_text_from_pdf, extract_profile_data
+except ImportError as e:
+    print(f"Import error: {e}")
+    sys.exit(1)
 
 class DatabaseSetupWorker(QThread):
     progress_update = pyqtSignal(str)
@@ -35,8 +39,8 @@ class DatabaseSetupWorker(QThread):
             self.progress_update.emit("Initializing database setup...")
             self.progress_percentage.emit(5)
             
-            # Call the silent setup function directly
-            success = setup_database_silent(self.progress_update.emit, self.progress_percentage.emit)
+            # Call the setup function with progress callbacks
+            success = self.setup_database_with_progress()
             
             self.progress_update.emit("Setup completed!" if success else "Setup failed!")
             self.progress_percentage.emit(100)
@@ -46,192 +50,240 @@ class DatabaseSetupWorker(QThread):
             self.progress_update.emit(f"Error: {str(e)}")
             self.progress_percentage.emit(0)
             self.finished_signal.emit(False)
-
-def setup_database_silent(progress_callback=None, percentage_callback=None):
-    """Silent setup database with progress callbacks"""
-    try:
-        # Always drop existing database first
-        if progress_callback:
-            progress_callback("Dropping existing database...")
-        if percentage_callback:
-            percentage_callback(10)
-        
-        import mysql.connector
+    
+    def setup_database_with_progress(self):
+        """Setup database with progress updates"""
         try:
-            temp_conn = mysql.connector.connect(
-                host='localhost',
-                user='root',
-                password=''
-            )
-            cursor = temp_conn.cursor()
-            cursor.execute("DROP DATABASE IF EXISTS Tubes3Stima")
-            temp_conn.close()
-            print("Dropped existing database")
-        except Exception as e:
-            print(f"Database drop error (normal if not exists): {e}")
-        
-        if progress_callback:
-            progress_callback("Creating fresh database...")
-        if percentage_callback:
-            percentage_callback(15)
-        
-        db_config = {
-            'host': 'localhost',
-            'user': 'root',
-            'password': '',
-            'database': 'Tubes3Stima',
-        }
-        
-        db = DatabaseManager(**db_config)
-        
-        if progress_callback:
-            progress_callback("Creating database and tables...")
-        if percentage_callback:
-            percentage_callback(20)
-        
-        if not db.create_database_and_tables():
-            if progress_callback:
-                progress_callback("Failed to create database/tables")
-            return False
-        
-        if progress_callback:
-            progress_callback("Connecting to database...")
-        if percentage_callback:
-            percentage_callback(25)
-        
-        if not db.connect():
-            if progress_callback:
-                progress_callback("Failed to connect to database")
-            return False
-        
-        if progress_callback:
-            progress_callback("Loading resume data from PDF files...")
-        if percentage_callback:
-            percentage_callback(30)
-        
-        # Load data silently
-        load_resume_data_silent(db, progress_callback, percentage_callback)
-        
-        if progress_callback:
-            progress_callback("Finalizing setup...")
-        if percentage_callback:
-            percentage_callback(95)
-        
-        db.disconnect()
-        return True
-        
-    except Exception as e:
-        if progress_callback:
-            progress_callback(f"Setup error: {str(e)}")
-        print(f"Setup database error: {e}")
-        return False
-
-def load_resume_data_silent(db: DatabaseManager, progress_callback=None, percentage_callback=None):
-    """Load resume data silently without user input - always process all files"""
-    # Use root directory for finding data folder
-    pdf_dir = os.path.join(root_dir, "data", "pdf")
-    
-    if progress_callback:
-        progress_callback(f"Looking for PDF files in: {pdf_dir}")
-    
-    if not os.path.exists(pdf_dir):
-        if progress_callback:
-            progress_callback("PDF directory not found - skipping data load...")
-        print(f"PDF directory not found: {pdf_dir}")
-        return
-    
-    # Count total files
-    total_files = 0
-    categories = []
-    for category in os.listdir(pdf_dir):
-        category_path = os.path.join(pdf_dir, category)
-        if os.path.isdir(category_path):
-            pdf_files = [f for f in os.listdir(category_path) if f.endswith('.pdf')]
-            total_files += len(pdf_files)
-            categories.append((category, pdf_files))
-    
-    if total_files == 0:
-        if progress_callback:
-            progress_callback("No PDF files found")
-        print("No PDF files found")
-        return
-    
-    # Process ALL files automatically
-    processed = 0
-    
-    if progress_callback:
-        progress_callback(f"Processing all {total_files} PDF files...")
-    
-    print(f"Total PDF files found: {total_files}")
-    
-    for category, pdf_files in categories:
-        if progress_callback:
-            progress_callback(f"Processing {category} category...")
-        
-        print(f"Processing category: {category}")
-        
-        for filename in pdf_files:
-            pdf_path = os.path.join(pdf_dir, category, filename)
+            # Drop existing database first
+            self.progress_update.emit("Dropping existing database...")
+            self.progress_percentage.emit(10)
             
+            import mysql.connector
             try:
-                # Extract and process
-                extracted_text = extract_text_from_pdf(pdf_path)
-                if extracted_text:
-                    profile = extract_profile_data(extracted_text)
-                    
-                    # Insert to database
-                    skills = ", ".join(profile.get('skills', []))[:2000]
-                    experience_list = [f"{exp.get('title', '')} ({exp.get('start', '')} - {exp.get('end', '')})" 
-                                     for exp in profile.get('experience', [])]
-                    experience = " | ".join(experience_list)[:2000]
-                    
-                    education_list = [f"{edu.get('degree', '')} in {edu.get('field', '')}" 
-                                    for edu in profile.get('education', [])]
-                    education = " | ".join(education_list)[:1000]
-                    
-                    gpa = float(profile['gpa'][0]) if profile.get('gpa') else None
-                    certifications = ", ".join(profile.get('certifications', []))[:1000]
-                    
-                    resume_id = db.insert_resume(
-                        filename=filename,
-                        category=category,
-                        file_path=pdf_path,
-                        extracted_text=extracted_text[:100000],
-                        skills=skills,
-                        experience=experience,
-                        education=education,
-                        gpa=gpa,
-                        certifications=certifications
-                    )
-                    
-                    if resume_id and resume_id > 0:
-                        print(f"Inserted {filename} with ID: {resume_id}")
-                    else:
-                        print(f"Failed to insert {filename}")
-                
-                processed += 1
-                
-                # Update progress
-                if percentage_callback:
-                    progress_percent = 30 + int((processed / total_files) * 60)
-                    percentage_callback(progress_percent)
-                
-                if progress_callback:
-                    progress_callback(f"Processed {processed}/{total_files} files...")
-                
-                # Print progress every 10 files
-                if processed % 10 == 0:
-                    print(f"Progress: {processed}/{total_files} files processed")
-                    
+                temp_conn = mysql.connector.connect(
+                    host='localhost',
+                    user='root',
+                    password='123'
+                )
+                cursor = temp_conn.cursor()
+                cursor.execute("DROP DATABASE IF EXISTS Tubes3Stima")
+                temp_conn.close()
+                print("Dropped existing database")
             except Exception as e:
-                if progress_callback:
-                    progress_callback(f"Error processing {filename}: {str(e)}")
-                print(f"Error processing {filename}: {e}")
-                continue
+                print(f"Database drop error (normal if not exists): {e}")
+            
+            self.progress_update.emit("Creating fresh database...")
+            self.progress_percentage.emit(15)
+            
+            db_config = {
+                'host': 'localhost',
+                'user': 'root',
+                'password': '123',
+                'database': 'Tubes3Stima',
+            }
+            
+            db = DatabaseManager(**db_config)
+            
+            self.progress_update.emit("Creating database and tables...")
+            self.progress_percentage.emit(20)
+            
+            if not db.create_database_and_tables():
+                self.progress_update.emit("Failed to create database/tables")
+                return False
+            
+            self.progress_update.emit("Connecting to database...")
+            self.progress_percentage.emit(25)
+            
+            if not db.connect():
+                self.progress_update.emit("Failed to connect to database")
+                return False
+            
+            # Run seeding if exists
+            self.progress_update.emit("Running seeding SQL...")
+            self.progress_percentage.emit(30)
+            self.run_seeding_sql(db_config)
+            
+            # Add profile columns
+            self.progress_update.emit("Adding profile columns...")
+            self.progress_percentage.emit(35)
+            self.add_profile_columns_to_resumes(db)
+            
+            self.progress_update.emit("Loading resume data from PDF files...")
+            self.progress_percentage.emit(40)
+            
+            # Load data with progress updates
+            self.load_resume_data_with_progress(db)
+            
+            self.progress_update.emit("Finalizing setup...")
+            self.progress_percentage.emit(95)
+            
+            db.disconnect()
+            return True
+            
+        except Exception as e:
+            self.progress_update.emit(f"Setup error: {str(e)}")
+            print(f"Setup database error: {e}")
+            return False
     
-    print(f"Final: Successfully processed {processed} out of {total_files} files")
+    def run_seeding_sql(self, db_config):
+        """Run seeding SQL if exists"""
+        try:
+            seeding_file = os.path.join(root_dir, 'tubes3_seeding.sql')
+            if os.path.exists(seeding_file):
+                print(f"Found seeding file: {seeding_file}")
+                # You can implement seeding logic here if needed
+                return True
+            else:
+                print("No seeding file found, skipping...")
+                return True
+        except Exception as e:
+            print(f"Seeding error: {e}")
+            return False
+    
+    def add_profile_columns_to_resumes(self, db: DatabaseManager):
+        """Add profile columns to existing resumes table"""
+        try:
+            cursor = db.connection.cursor()
+            
+            # Check if columns already exist
+            cursor.execute("DESCRIBE resumes")
+            existing_columns = [row[0] for row in cursor.fetchall()]
+            
+            columns_to_add = [
+                ('applicant_id', 'INT DEFAULT NULL'),
+                ('first_name', 'VARCHAR(50) DEFAULT NULL'),
+                ('last_name', 'VARCHAR(50) DEFAULT NULL'),
+                ('date_of_birth', 'DATE DEFAULT NULL'),
+                ('address', 'VARCHAR(255) DEFAULT NULL'),
+                ('phone_number', 'VARCHAR(20) DEFAULT NULL'),
+                ('application_role', 'VARCHAR(100) DEFAULT NULL')
+            ]
+            
+            for col_name, col_def in columns_to_add:
+                if col_name not in existing_columns:
+                    try:
+                        cursor.execute(f"ALTER TABLE resumes ADD COLUMN {col_name} {col_def}")
+                        print(f"✓ Added column {col_name}")
+                    except Exception as col_error:
+                        print(f"Warning: Could not add column {col_name}: {col_error}")
+                else:
+                    print(f"✓ Column {col_name} already exists")
+            
+            db.connection.commit()
+            print("✓ Profile columns setup completed")
+            
+        except Exception as e:
+            print(f"Error adding profile columns: {e}")
+            db.connection.rollback()
+    
+    def load_resume_data_with_progress(self, db: DatabaseManager):
+        """Load resume data with progress updates"""
+        pdf_dir = os.path.join(root_dir, "data", "pdf")
+        
+        self.progress_update.emit(f"Looking for PDF files in: {pdf_dir}")
+        
+        if not os.path.exists(pdf_dir):
+            self.progress_update.emit("PDF directory not found - skipping data load...")
+            print(f"PDF directory not found: {pdf_dir}")
+            return
+        
+        # Count total files
+        total_files = 0
+        categories = []
+        for category in os.listdir(pdf_dir):
+            category_path = os.path.join(pdf_dir, category)
+            if os.path.isdir(category_path):
+                pdf_files = [f for f in os.listdir(category_path) if f.endswith('.pdf')]
+                if pdf_files:  # Only add categories with PDF files
+                    total_files += len(pdf_files)
+                    categories.append((category, pdf_files))
+        
+        if total_files == 0:
+            self.progress_update.emit("No PDF files found")
+            print("No PDF files found")
+            return
+        
+        # Process files with progress updates
+        processed = 0
+        loaded_count = 0
+        
+        self.progress_update.emit(f"Found {total_files} PDF files to process...")
+        print(f"Total files to process: {total_files}")
+        
+        for category, pdf_files in categories:
+            self.progress_update.emit(f"Processing {category} category ({len(pdf_files)} files)...")
+            print(f"Processing category {category}: {len(pdf_files)} files")
+            files_to_process = pdf_files 
+            
+            for filename in files_to_process:
+                pdf_path = os.path.join(pdf_dir, category, filename)
+                
+                try:
+                    # Extract and process
+                    extracted_text = extract_text_from_pdf(pdf_path)
+                    if extracted_text:
+                        profile = extract_profile_data(extracted_text)
+                        
+                        # Prepare data for insertion
+                        skills = ", ".join(profile.get('skills', []))[:2000]
+                        
+                        experience_list = []
+                        for exp in profile.get('experience', []):
+                            exp_text = f"{exp.get('title', '')} ({exp.get('start', '')} - {exp.get('end', '')})"
+                            experience_list.append(exp_text)
+                        experience = " | ".join(experience_list)[:2000]
+                        
+                        education_list = []
+                        for edu in profile.get('education', []):
+                            edu_text = f"{edu.get('degree', '')} in {edu.get('field', '')}"
+                            education_list.append(edu_text)
+                        education = " | ".join(education_list)[:1000]
+                        
+                        gpa = float(profile['gpa'][0]) if profile.get('gpa') else None
+                        certifications = ", ".join(profile.get('certifications', []))[:1000]
+                        
+                        # Insert to database
+                        resume_id = db.insert_resume(
+                            filename=filename,
+                            category=category,
+                            file_path=pdf_path,
+                            extracted_text=extracted_text[:100000],
+                            skills=skills,
+                            experience=experience,
+                            education=education,
+                            gpa=gpa,
+                            certifications=certifications
+                        )
+                        
+                        if resume_id and resume_id > 0:
+                            loaded_count += 1
+                            # Only print every 10th success to avoid spam
+                            if loaded_count % 10 == 0:
+                                print(f"✓ Inserted {loaded_count} files so far...")
+                        else:
+                            print(f"✗ Failed to insert {filename}")
+                    
+                    processed += 1
+                    
+                    progress_percent = 40 + int((processed / total_files) * 50)
+                    self.progress_percentage.emit(progress_percent)
+                    
+                    if processed % 25 == 0:
+                        self.progress_update.emit(f"Processed {processed}/{total_files} files ({loaded_count} loaded)...")
+                        print(f"Progress: {processed}/{total_files} files processed, {loaded_count} loaded successfully")
+                    
+                except Exception as e:
+                    self.progress_update.emit(f"Error processing {filename}: {str(e)}")
+                    print(f"Error processing {filename}: {e}")
+                    processed += 1
+                    continue
+        
+        print(f"Final: Successfully loaded {loaded_count} out of {processed} files processed")
+        self.progress_update.emit(f"Loaded {loaded_count} resumes successfully!")
+        
+        # Show final statistics
+        self.progress_update.emit(f"Setup completed: {loaded_count}/{total_files} files loaded into database")
 
-# Rest of the GUI code remains the same...
 class DatabaseSetupGUI(QWidget):
     setup_completed = pyqtSignal(bool)
     
@@ -247,30 +299,13 @@ class DatabaseSetupGUI(QWidget):
         layout.setAlignment(Qt.AlignCenter)
         layout.setSpacing(20)
         
-        # Logo section (sama seperti landing_gui)
+        # Logo section
         logo_layout = QHBoxLayout()
-        try:
-            # Try to load SVG logo
-            from PyQt5.QtSvg import QSvgWidget
-            logo_path = os.path.join(root_dir, "src", "gui", "logo_bukdur.svg")
-            if os.path.exists(logo_path):
-                logo = QSvgWidget(logo_path)
-                logo.setFixedSize(250, 130)  # Smaller than landing
-                logo_layout.addWidget(logo, alignment=Qt.AlignCenter)
-            else:
-                # Fallback to text if SVG not found
-                title = QLabel("BUKIT DURI")
-                title.setFont(QFont("Arial", 32, QFont.Bold))
-                title.setStyleSheet("color: #00FFC6;")
-                title.setAlignment(Qt.AlignCenter)
-                logo_layout.addWidget(title)
-        except ImportError:
-            # Fallback if QSvgWidget not available
-            title = QLabel("BUKIT DURI")
-            title.setFont(QFont("Arial", 32, QFont.Bold))
-            title.setStyleSheet("color: #00FFC6;")
-            title.setAlignment(Qt.AlignCenter)
-            logo_layout.addWidget(title)
+        title = QLabel("BUKIT DURI")
+        title.setFont(QFont("Arial", 32, QFont.Bold))
+        title.setStyleSheet("color: #00FFC6;")
+        title.setAlignment(Qt.AlignCenter)
+        logo_layout.addWidget(title)
         
         layout.addLayout(logo_layout)
         
@@ -371,11 +406,13 @@ class DatabaseSetupGUI(QWidget):
             self.layout().addWidget(retry_btn)
             
     def retry_setup(self):
+        # Remove retry button
         for i in reversed(range(self.layout().count())):
             widget = self.layout().itemAt(i).widget()
             if isinstance(widget, QPushButton):
                 widget.setParent(None)
         
+        # Reset UI
         self.spinner_label.setText("⟳")
         self.spinner_label.setStyleSheet("color: #00FFC6; font-size: 24px;")
         self.setup_label.setText("Retrying database setup...")

@@ -42,9 +42,6 @@ def setup_database():
     print("Loading resume data from PDF files...")
     load_resume_data(db)
     
-    print("Testing search functionality...")
-    test_search(db)
-    
     db.disconnect()
     print("Database setup completed successfully!")
     return True
@@ -179,21 +176,8 @@ def load_resume_data(db: DatabaseManager):
             total_files += len(pdf_files)
     
     print(f"Total PDF files found: {total_files}")
-    
-    # Ask user for processing limit
-    proceed = input(f"\nProcess all {total_files} PDF files? This may take a while. (y/n): ")
-    if proceed.lower() != 'y':
-        try:
-            limit = int(input("Enter number of files to process per category (0 for all): "))
-            if limit == 0:
-                limit = None
-        except ValueError:
-            limit = 5  
-            print(f"Invalid input. Using default limit of {limit} files per category")
-    else:
-        limit = None 
-    
-    # Process files
+
+    limit = None
     for category in os.listdir(pdf_dir):
         category_path = os.path.join(pdf_dir, category)
         if not os.path.isdir(category_path):
@@ -305,34 +289,6 @@ def load_resume_data(db: DatabaseManager):
     print(f"Successfully loaded: {loaded_count} resumes")
     print(f"Errors: {error_count} files")
     print(f"Success rate: {(loaded_count/(loaded_count+error_count)*100):.1f}%" if (loaded_count+error_count) > 0 else "No files processed")
-
-def test_search(db: DatabaseManager):
-    """Test basic search functionality"""
-    print("\n=== Testing Search Functionality ===")
-
-    stats = db.get_statistics()
-    print(f"Total resumes in database: {stats.get('total_resumes', 0)}")
-    
-    if stats.get('total_resumes', 0) == 0:
-        print("No data to test - skipping search tests")
-        return
-    
-    # Test profile search
-    print("\nTest 1: Searching for profiles with names...")
-    results = db.search_resumes_with_profile("", limit=20)
-    profile_count = sum(1 for r in results if r.get('first_name'))
-    print(f"Found {profile_count} resumes with profile data out of {len(results)} total")
-    
-    # Show sample profile data
-    for result in results[:5]:
-        if result.get('first_name'):
-            name = f"{result['first_name']} {result['last_name']}"
-            role = result.get('application_role', 'No role')
-            print(f"  - {name} applying for {role}")
-    
-    print(f"\nCategories in database:")
-    for cat_stat in stats.get('resumes_by_category', []):
-        print(f"  {cat_stat['category']}: {cat_stat['count']} resumes")
 
 if __name__ == "__main__":
     setup_database()

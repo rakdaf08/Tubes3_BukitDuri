@@ -313,7 +313,6 @@ class DatabaseManager:
             print(f"Error inserting resume with profile: {e}")
             self.connection.rollback()
             return -1
-
     def search_resumes_with_profile(self, keyword="", category=None, skill_filter=None, 
                                 experience_filter=None, limit=50):
         """Search resumes and return with profile information"""
