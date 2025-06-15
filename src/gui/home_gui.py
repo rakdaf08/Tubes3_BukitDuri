@@ -100,7 +100,7 @@ class CVCard(QWidget):
             current_dir = os.path.dirname(os.path.abspath(__file__))
             sys.path.append(current_dir)
             
-            db = DatabaseManager(password="12345678")
+            db = DatabaseManager()
             if db.connect():
                 resume = db.get_resume_by_id(self.resume_id)
                 if resume:
@@ -156,9 +156,7 @@ class CVCard(QWidget):
 
     def view_cv_clicked(self):
         try:
-            # Get resume data from database
-            from src.db.db_connector import DatabaseManager
-            db = DatabaseManager(password="12345678")
+            db = DatabaseManager()
             if db.connect():
                 resume = db.get_resume_by_id(self.resume_id)
                 if resume and resume['file_path']:

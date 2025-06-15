@@ -3,6 +3,8 @@ import sys
 import subprocess
 
 sys.path.append(os.path.join(os.path.dirname(__file__), 'src'))
+sys.path.append(os.path.dirname(__file__))
+from config import DATABASE_CONFIG
 
 from db.db_connector import DatabaseManager
 from core.extractor import extract_text_from_pdf, extract_profile_data
@@ -10,16 +12,8 @@ from core.extractor import extract_text_from_pdf, extract_profile_data
 def setup_database():
     """Setup database and load initial data"""
     print("=== Setting up Resume Search Database ===")
-    
-    # Database config
-    db_config = {
-        'host': 'localhost',
-        'user': 'root',
-        'password': '12345678', 
-        'database': 'Tubes3Stima',
-    }
-    
-    db = DatabaseManager(**db_config)
+
+    db = DatabaseManager(**DATABASE_CONFIG)
     
     print("Creating database and tables...")
     if not db.create_database_and_tables():
@@ -33,7 +27,7 @@ def setup_database():
     
     # Run seeding SQL file
     print("Running seeding SQL file...")
-    run_seeding_sql(db_config)
+    run_seeding_sql(DATABASE_CONFIG)
     
     # Add profile columns to resumes table
     print("Adding profile columns to resumes table...")
@@ -48,51 +42,37 @@ def setup_database():
 
 def run_seeding_sql(db_config):
     try:
-        # Look for seeding file
-        base_dir = os.path.dirname(os.path.abspath(__file__))
-        seeding_file = None
-        
-        # Check multiple possible locations
-        possible_paths = [
-            os.path.join(base_dir, 'tubes3_seeding.sql'),
-            os.path.join(base_dir, 'data', 'tubes3_seeding.sql'),
-            os.path.join(os.path.dirname(base_dir), 'tubes3_seeding.sql'),
-        ]
-        
-        for path in possible_paths:
-            if os.path.exists(path):
-                seeding_file = path
-                break
-        
-        if not seeding_file:
-            print("tubes3_seeding.sql not found!")
-            return
-        
-        print(f"Found seeding file: {seeding_file}")
-        
-        # Run MySQL command to execute the SQL file
-        cmd = [
-            'mysql',
-            '-h', db_config['host'],
-            '-u', db_config['user'],
-            db_config['database']
-        ]
-        
-        # Add password if not empty
-        if db_config['password']:
-            cmd.extend(['-p' + db_config['password']])
-        
-        # Execute the SQL file
-        with open(seeding_file, 'r', encoding='utf-8') as f:
-            result = subprocess.run(cmd, stdin=f, capture_output=True, text=True)
-        
-        if result.returncode == 0:
-            print("Seeding SQL executed successfully")
-        else:
-            print(f"Error executing seeding SQL: {result.stderr}")
+        seeding_file = os.path.join(root_dir, 'tubes3_seeding.sql')
+        if os.path.exists(seeding_file):
+            print(f"Found seeding file: {seeding_file}")
+            # Run MySQL command to execute the SQL file
+            cmd = [
+                'mysql',
+                '-h', db_config['host'],
+                '-u', db_config['user'],
+                db_config['database']
+            ]
             
+            # Add password if not empty
+            if db_config['password']:
+                cmd.extend(['-p' + db_config['password']])
+            
+            # Execute the SQL file
+            with open(seeding_file, 'r', encoding='utf-8') as f:
+                result = subprocess.run(cmd, stdin=f, capture_output=True, text=True)
+            
+            if result.returncode == 0:
+                print("Seeding SQL executed successfully")
+            else:
+                print(f"Error executing seeding SQL: {result.stderr}")
+            return True
+        else:
+            print("No seeding file found, skipping...")
+            return True
+        
     except Exception as e:
-        print(f"Error running seeding SQL: {e}")
+        print(f"Seeding error: {e}")
+        return False
 
 def add_profile_columns_to_resumes(db: DatabaseManager):
     """Add profile columns to existing resumes table"""

@@ -13,6 +13,7 @@ root_dir = os.path.dirname(parent_dir)     # Go up from src to root
 
 sys.path.append(parent_dir)  # Add src directory
 sys.path.append(root_dir)    # Add root directory
+from config import DATABASE_CONFIG
 
 # Import SVG support
 try:
@@ -54,7 +55,6 @@ class DatabaseSetupWorker(QThread):
             self.finished_signal.emit(False)
     
     def setup_database_with_progress(self):
-        """Setup database with progress updates"""
         try:
             # Drop existing database first
             self.progress_update.emit("Dropping existing database...")
@@ -63,9 +63,9 @@ class DatabaseSetupWorker(QThread):
             import mysql.connector
             try:
                 temp_conn = mysql.connector.connect(
-                    host='localhost',
-                    user='root',
-                    password='12345678'
+                    host=DATABASE_CONFIG['host'],         
+                    user=DATABASE_CONFIG['user'],         
+                    password=DATABASE_CONFIG['password']    
                 )
                 cursor = temp_conn.cursor()
                 cursor.execute("DROP DATABASE IF EXISTS Tubes3Stima")
@@ -77,14 +77,8 @@ class DatabaseSetupWorker(QThread):
             self.progress_update.emit("Creating fresh database...")
             self.progress_percentage.emit(15)
             
-            db_config = {
-                'host': 'localhost',
-                'user': 'root',
-                'password': '12345678',
-                'database': 'Tubes3Stima',
-            }
-            
-            db = DatabaseManager(**db_config)
+            # Use global config instead of hardcoded values
+            db = DatabaseManager()
             
             self.progress_update.emit("Creating database and tables...")
             self.progress_percentage.emit(20)
@@ -100,10 +94,10 @@ class DatabaseSetupWorker(QThread):
                 self.progress_update.emit("Failed to connect to database")
                 return False
             
-            # Run seeding if exists
+            # Run seeding if exists - PASS DATABASE_CONFIG CORRECTLY
             self.progress_update.emit("Running seeding SQL...")
             self.progress_percentage.emit(30)
-            self.run_seeding_sql(db_config)
+            self.run_seeding_sql(DATABASE_CONFIG)  # Use global config instead of undefined db_config
             
             # Add profile columns
             self.progress_update.emit("Adding profile columns...")

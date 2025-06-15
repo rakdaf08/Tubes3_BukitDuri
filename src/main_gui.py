@@ -11,6 +11,7 @@ from PyQt5.QtCore import Qt, QSize, QThread, pyqtSignal, QTimer
 current_dir = os.path.dirname(os.path.abspath(__file__))
 parent_dir = os.path.dirname(current_dir)
 sys.path.append(parent_dir)
+from config import DATABASE_CONFIG, SEARCH_SETTINGS
 
 # Import your existing GUI classes
 from gui.landing_gui import BukitDuriApp
@@ -27,17 +28,16 @@ class SearchWorker(QThread):
     error_occurred = pyqtSignal(str)
     timing_info = pyqtSignal(dict)  # New signal for timing information
     
-    def __init__(self, keywords, method, top_matches, db_password="12345678"):
+    def __init__(self, keywords, method, top_matches, db_password=""):
         super().__init__()
         self.keywords = keywords
         self.method = method
         self.top_matches = top_matches
-        self.db_password = db_password
     
     def run(self):
         try:
             # Connect to database
-            db = DatabaseManager(password="12345678")
+            db = DatabaseManager()
             if not db.connect():
                 self.error_occurred.emit("Failed to connect to database")
                 return
@@ -887,9 +887,9 @@ class MainApplication(QApplication):
             # Connect without specifying database
             import mysql.connector
             temp_conn = mysql.connector.connect(
-                host='localhost',
-                user='root',
-                password='12345678'
+            host=DATABASE_CONFIG['host'],  
+            user=DATABASE_CONFIG['user'],     
+            password=DATABASE_CONFIG['password'] 
             )
             cursor = temp_conn.cursor()
             
@@ -962,7 +962,6 @@ class MainApplication(QApplication):
         self.landing_page.show()
 
 def main():
-    
     # Add src to path
     current_dir = os.path.dirname(os.path.abspath(__file__))
     src_dir = os.path.join(current_dir, 'src')

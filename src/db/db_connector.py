@@ -1,17 +1,21 @@
 import mysql.connector
 from mysql.connector import Error
 import logging
+import sys, os
 from typing import List, Dict, Any, Optional, Tuple
 from datetime import datetime
 import json
+sys.path.append(os.path.dirname(os.path.dirname(__file__)))
+from config import DATABASE_CONFIG
 
 class DatabaseManager:
-    def __init__(self, host="localhost", user="root", password="12345678", database="Tubes3Stima"):
+    def __init__(self, host=None, user=None, password=None, database=None):
         """Initialize database manager with connection parameters"""
-        self.host = host
-        self.user = user
-        self.password = password
-        self.database = database
+        # Use global config as default, allow override
+        self.host = host or DATABASE_CONFIG['host']
+        self.user = user or DATABASE_CONFIG['user'] 
+        self.password = password or DATABASE_CONFIG['password'] 
+        self.database = database or DATABASE_CONFIG['database']
         self.connection = None
         
     def connect(self):
@@ -20,7 +24,7 @@ class DatabaseManager:
             self.connection = mysql.connector.connect(
                 host=self.host,
                 user=self.user,
-                password="12345678",
+                password=self.password,
                 database=self.database,
                 autocommit=True
             )
