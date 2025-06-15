@@ -697,7 +697,6 @@ class SummaryPage(QWidget):
             return ["Skills extraction error"]
 
     def extract_experience(self):
-        """Extract work experience using cached profile data - FIXED untuk mendapatkan semua data"""
         try:
             profile = self.get_cached_profile()
             experiences = profile.get('experience', [])
