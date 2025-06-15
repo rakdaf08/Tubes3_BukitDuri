@@ -94,7 +94,6 @@ class CVCard(QWidget):
         self.setLayout(outer_layout)
     
     def view_more_clicked(self):
-        """FIXED - Handle view more button click using DatabaseManager"""
         try:
             if not self.resume_id:
                 QMessageBox.warning(self, "Warning", "No resume ID available.")
