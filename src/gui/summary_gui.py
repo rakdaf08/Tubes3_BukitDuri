@@ -13,7 +13,18 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 parent_dir = os.path.dirname(current_dir)
 sys.path.append(parent_dir)
 
+from config import ENCRYPTION_SETTINGS
 from core.extractor import extract_profile_data
+
+# Import encryption status
+try:
+    from encryption_engine import AdvancedEncryption
+    ENCRYPTION_ENABLED = ENCRYPTION_SETTINGS.get('enabled', False)
+    ENCRYPTED_FIELDS = ENCRYPTION_SETTINGS.get('encrypt_fields', [])
+except ImportError:
+    print("Warning: Encryption engine not available in summary_gui")
+    ENCRYPTION_ENABLED = False
+    ENCRYPTED_FIELDS = []
 
 class SummaryPage(QWidget):
     def __init__(self, resume_data=None):
@@ -122,7 +133,11 @@ class SummaryPage(QWidget):
             }
         """)
         back_btn.clicked.connect(self.go_back)
-        
+
+        enc_status = QLabel("🔒 Encrypted" if ENCRYPTION_ENABLED else "🔓 Plain")
+        enc_status.setStyleSheet("color: #00FFC6; font-size: 12px;")
+    
+
         header.addWidget(back_btn)
         header.addStretch()
         layout.addLayout(header)

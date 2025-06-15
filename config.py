@@ -1,7 +1,7 @@
 DATABASE_CONFIG = {
     'host': 'localhost',
     'user': 'root',
-    'password': '123',  # Ganti password di sini saja
+    'password': '',  # Ganti password di sini saja
     'database': 'Tubes3Stima'
 }
 
@@ -10,4 +10,13 @@ SEARCH_SETTINGS = {
     'fuzzy_threshold': 60,
     'high_similarity_threshold': 70,
     'items_per_page': 4
+}
+
+ENCRYPTION_SETTINGS = {
+    'enabled': True,  # Set to False untuk disable encryption
+    'encrypt_fields': [
+        'first_name', 'last_name', 'date_of_birth', 
+        'address', 'phone_number', 'application_role'
+    ],
+    'master_key_env': 'BukitDuri_SecureKey_CV_Analyzer'
 }

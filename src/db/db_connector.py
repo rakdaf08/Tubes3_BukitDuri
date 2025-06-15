@@ -5,8 +5,19 @@ import sys, os
 from typing import List, Dict, Any, Optional, Tuple
 from datetime import datetime
 import json
+
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
-from config import DATABASE_CONFIG
+from config import DATABASE_CONFIG, ENCRYPTION_SETTINGS
+
+# Import custom encryption
+try:
+    from encryption_engine import encryption_engine
+    ENCRYPTION_ENABLED = ENCRYPTION_SETTINGS.get('enabled', False)
+    ENCRYPTED_FIELDS = ENCRYPTION_SETTINGS.get('encrypt_fields', [])
+except ImportError:
+    print("Warning: Encryption engine not available")
+    ENCRYPTION_ENABLED = False
+    ENCRYPTED_FIELDS = []
 
 class DatabaseManager:
     def __init__(self, host=None, user=None, password=None, database=None):
@@ -176,17 +187,39 @@ class DatabaseManager:
             print(f"Error searching resumes: {err}")
             return []
         
-    def get_resume_by_id(self, resume_id: int) -> Optional[Dict]:
-        """Get specific resume by ID"""
+    def get_resume_by_id(self, resume_id):
+        """Get resume dengan dekripsi otomatis"""
         try:
             cursor = self.connection.cursor(dictionary=True)
-            query = "SELECT * FROM resumes WHERE id = %s"
+            
+            query = """
+            SELECT r.*, 
+                ap.first_name as profile_first_name, ap.last_name as profile_last_name, 
+                ap.date_of_birth as profile_dob, ap.address as profile_address, 
+                ap.phone_number as profile_phone,
+                ad.application_role as profile_role
+            FROM resumes r
+            LEFT JOIN ApplicationDetail ad ON (
+                ad.cv_path LIKE CONCAT('%', r.filename) OR
+                ad.cv_path LIKE CONCAT('%', r.category, '/', r.filename)
+            )
+            LEFT JOIN ApplicantProfile ap ON ad.applicant_id = ap.applicant_id
+            WHERE r.id = %s
+            """
+            
             cursor.execute(query, (resume_id,))
-            result = cursor.fetchone()
-            cursor.close()
-            return result
-        except mysql.connector.Error as err:
-            print(f"Error fetching resume: {err}")
+            resume = cursor.fetchone()
+            
+            if resume:
+                # Decrypt sensitive fields
+                resume = self._decrypt_resume_data(resume)
+                
+                print(f"DEBUG - Resume {resume_id} decrypted: {resume.get('first_name', 'No name')}")
+            
+            return resume
+            
+        except Exception as e:
+            print(f"Error getting resume by ID {resume_id}: {e}")
             return None
     
     def get_all_categories(self) -> List[str]:
@@ -287,13 +320,18 @@ class DatabaseManager:
     def insert_resume_with_profile(self, filename, category, file_path, extracted_text, 
                                 skills=None, experience=None, education=None, 
                                 gpa=None, certifications=None,
-                                # Profile data
                                 applicant_id=None, first_name=None, last_name=None,
                                 date_of_birth=None, address=None, phone_number=None,
                                 application_role=None):
-        """Insert resume with complete profile information"""
+        """Insert resume dengan enkripsi pada data sensitif"""
         try:
             cursor = self.connection.cursor()
+            
+            # Encrypt sensitive data
+            encrypted_first_name = self._encrypt_field('first_name', first_name)
+            encrypted_last_name = self._encrypt_field('last_name', last_name)
+            encrypted_address = self._encrypt_field('address', address)
+            encrypted_phone = self._encrypt_field('phone_number', phone_number)
             
             insert_query = """
             INSERT INTO resumes (
@@ -307,17 +345,18 @@ class DatabaseManager:
             cursor.execute(insert_query, (
                 filename, category, file_path, extracted_text, skills,
                 experience, education, gpa, certifications,
-                applicant_id, first_name, last_name, date_of_birth,
-                address, phone_number, application_role
+                applicant_id, encrypted_first_name, encrypted_last_name, date_of_birth,
+                encrypted_address, encrypted_phone, application_role
             ))
             
             self.connection.commit()
             return cursor.lastrowid
             
         except Exception as e:
-            print(f"Error inserting resume with profile: {e}")
+            print(f"Error inserting encrypted resume: {e}")
             self.connection.rollback()
             return -1
+    
     def search_resumes_with_profile(self, keyword="", category=None, skill_filter=None, 
                                 experience_filter=None, limit=50):
         """Search resumes and return with profile information"""
@@ -430,6 +469,46 @@ class DatabaseManager:
         except Exception as e:
             print(f"Error getting resume by ID {resume_id}: {e}")
             return None
+        
+    def _encrypt_field(self, field_name, value):
+        """Encrypt field jika dalam daftar encrypted fields"""
+        if ENCRYPTION_ENABLED and field_name in ENCRYPTED_FIELDS and value:
+            try:
+                return encryption_engine.encrypt(str(value))
+            except:
+                return value
+        return value
+
+    def _decrypt_field(self, field_name, value):
+        """Decrypt field jika dalam daftar encrypted fields"""
+        if ENCRYPTION_ENABLED and field_name in ENCRYPTED_FIELDS and value:
+            try:
+                return encryption_engine.decrypt(str(value))
+            except:
+                return value
+        return value
+
+    def _encrypt_resume_data(self, resume_data):
+        """Encrypt sensitive fields dalam resume data"""
+        if not ENCRYPTION_ENABLED:
+            return resume_data
+        
+        encrypted_data = resume_data.copy()
+        for field in ENCRYPTED_FIELDS:
+            if field in encrypted_data:
+                encrypted_data[field] = self._encrypt_field(field, encrypted_data[field])
+        return encrypted_data
+
+    def _decrypt_resume_data(self, resume_data):
+        """Decrypt sensitive fields dalam resume data"""
+        if not ENCRYPTION_ENABLED or not resume_data:
+            return resume_data
+        
+        decrypted_data = resume_data.copy()
+        for field in ENCRYPTED_FIELDS:
+            if field in decrypted_data:
+                decrypted_data[field] = self._decrypt_field(field, decrypted_data[field])
+        return decrypted_data
     
 def get_connection():
     """Legacy function - use DatabaseManager class instead"""
