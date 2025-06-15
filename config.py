@@ -2,7 +2,6 @@ DATABASE_CONFIG = {
     'host': 'localhost',
     'user': 'root',
     'password': '',  # Ganti password di sini saja
-    'password': '12345678',  # Ganti password di sini saja
     'database': 'Tubes3Stima'
 }
 
@@ -14,7 +13,7 @@ SEARCH_SETTINGS = {
 }
 
 ENCRYPTION_SETTINGS = {
-    'enabled': True,  # Set to False untuk disable encryption
+    'enabled': True, 
     'encrypt_fields': [
         'first_name', 
         'last_name', 
