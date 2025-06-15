@@ -430,9 +430,6 @@ class IntegratedLandingPage(BukitDuriApp):
         
         # Create results window with search parameters
         self.results_window = IntegratedHomePage(results, search_params)
-        
-        # IMPORTANT: Connect timing signal AFTER results window is fully initialized
-        # Use QTimer to ensure UI is ready
         QTimer.singleShot(100, lambda: self.connect_timing_signal())
         
         self.results_window.show()
@@ -924,7 +921,6 @@ class MainApplication(QApplication):
     
     def show_setup_gui(self):
         try:
-            # Fix import path
             sys.path.append(os.path.join(os.path.dirname(__file__), 'gui'))
             from database_setup_gui import DatabaseSetupGUI
             

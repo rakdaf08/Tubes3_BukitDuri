@@ -3,7 +3,6 @@ import sys
 import time
 import getpass
 
-# Add the src directory to Python path for proper imports
 current_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(current_dir)
 

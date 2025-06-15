@@ -6,20 +6,18 @@ from PyQt5.QtWidgets import *
 from PyQt5.QtGui import QFont, QCursor, QIcon
 from PyQt5.QtCore import Qt, QSize
 
-# Add path for imports
 current_dir = os.path.dirname(os.path.abspath(__file__))
 parent_dir = os.path.dirname(current_dir)
 sys.path.append(parent_dir)
 
-# Import GUI components - FIXED IMPORT PATH
-from gui.summary_gui import SummaryPage  # Changed from gui.summary_gui
+from gui.summary_gui import SummaryPage  
 from src.db.db_connector import DatabaseManager
 
 class CVCard(QWidget):
     def __init__(self, name, matches, skills, resume_id=None, parent_window=None):
         super().__init__()
         self.resume_id = resume_id
-        self.parent_window = parent_window  # Reference to parent window
+        self.parent_window = parent_window  
         self.setFixedSize(350, 300)
         self.setStyleSheet("background-color: #1a1a1a;") 
 
@@ -91,7 +89,6 @@ class CVCard(QWidget):
         card_layout.addLayout(btn_layout)
         card_frame.setLayout(card_layout)
 
-        # Set layout
         outer_layout = QVBoxLayout()
         outer_layout.addWidget(card_frame)
         self.setLayout(outer_layout)
@@ -105,7 +102,6 @@ class CVCard(QWidget):
             
             print(f"DEBUG - Opening summary for resume ID: {self.resume_id}")
             
-            # Use DatabaseManager for database operations
             db_manager = DatabaseManager()
             
             if not db_manager.connect():
@@ -113,7 +109,6 @@ class CVCard(QWidget):
                 return
             
             try:
-                # Get resume data using DatabaseManager
                 resume_data = db_manager.get_resume_by_id(self.resume_id)
                 
                 if not resume_data:
@@ -128,7 +123,7 @@ class CVCard(QWidget):
                 print(f"Address: {resume_data.get('address', 'N/A')}")
                 print(f"Phone: {resume_data.get('phone_number', 'N/A')}")
                 
-                # Format data for summary page
+                # format data for summary page
                 formatted_data = {
                     'id': resume_data.get('id'),
                     'filename': resume_data.get('filename'),
@@ -147,12 +142,11 @@ class CVCard(QWidget):
                     'certifications': resume_data.get('certifications', '')
                 }
                 
-                # Open summary page
+                # open summary page
                 self.summary_page = SummaryPage(formatted_data)
                 self.summary_page.show()
                 
             finally:
-                # Always disconnect from database
                 db_manager.disconnect()
                 
         except Exception as e:
@@ -165,7 +159,6 @@ class CVCard(QWidget):
                 QMessageBox.warning(self, "Warning", "No resume ID available.")
                 return
             
-            # Use DatabaseManager for database operations
             db_manager = DatabaseManager()
             
             if not db_manager.connect():
@@ -178,14 +171,12 @@ class CVCard(QWidget):
                 if resume and resume.get('file_path'):
                     file_path = resume['file_path']
                     
-                    # Check if file exists
                     if os.path.exists(file_path):
-                        # Open PDF with default system viewer
                         if platform.system() == 'Darwin':  # macOS
                             subprocess.run(['open', file_path])
                         elif platform.system() == 'Windows':
                             os.startfile(file_path)
-                        else:  # Linux
+                        else:  # linux
                             subprocess.run(['xdg-open', file_path])
                     else:
                         QMessageBox.warning(self, "File Not Found", 
@@ -220,7 +211,6 @@ class SearchApp(QWidget):
         self.items_per_page = 6
         self.current_page = 0
 
-        # Initialize database manager
         self.db_manager = DatabaseManager()
 
         self.initUI()
@@ -251,12 +241,10 @@ class SearchApp(QWidget):
         self.updateCards()
 
     def setupFilterBar(self):
-        # Create filter bar with back button, method dropdown, number input, and search input
         filter_layout = QHBoxLayout()
         filter_layout.setAlignment(Qt.AlignCenter)
         filter_layout.setSpacing(15)
 
-        # Back button
         back_btn = QPushButton("<")
         back_btn.setFixedSize(50, 40)
         back_btn.setCursor(QCursor(Qt.PointingHandCursor))
@@ -275,7 +263,6 @@ class SearchApp(QWidget):
         """)
         filter_layout.addWidget(back_btn)
 
-        # Method dropdown (KMP, BM, etc.)
         self.method_dropdown = QComboBox()
         self.method_dropdown.addItems(["KMP", "BM", "AC"])
         self.method_dropdown.setCurrentText("KMP")
@@ -311,7 +298,6 @@ class SearchApp(QWidget):
         """)
         filter_layout.addWidget(self.method_dropdown)
 
-        # Number input (top matches)
         self.top_input = QLineEdit("3")
         self.top_input.setFixedSize(60, 40)
         self.top_input.setAlignment(Qt.AlignCenter)
@@ -327,7 +313,6 @@ class SearchApp(QWidget):
         """)
         filter_layout.addWidget(self.top_input)
 
-        # Search input field
         self.keyword_input = QLineEdit("React, Express, HTML")
         self.keyword_input.setFixedHeight(40)
         self.keyword_input.setMinimumWidth(200)
@@ -346,7 +331,6 @@ class SearchApp(QWidget):
         """)
         filter_layout.addWidget(self.keyword_input)
 
-        # Search button (green circle)
         search_btn = QPushButton()
         search_btn.setFixedSize(40, 40)
         search_btn.setCursor(QCursor(Qt.PointingHandCursor))
@@ -421,7 +405,6 @@ class SearchApp(QWidget):
         self.exact_timing_label.hide()
         self.fuzzy_timing_label.hide()
         
-        # Fix import - import SearchWorker from main_gui
         try:
             current_dir = os.path.dirname(os.path.abspath(__file__))
             parent_dir = os.path.dirname(current_dir)
@@ -429,15 +412,13 @@ class SearchApp(QWidget):
             
             from main_gui import SearchWorker
             
-            # Show loading
             self.loading_dialog = QProgressDialog("Searching...", "Cancel", 0, 0, self)
             self.loading_dialog.setWindowModality(Qt.WindowModal)
             self.loading_dialog.show()
             
-            # Create search worker
             self.search_worker = SearchWorker(keywords, method, top_matches, "")
             self.search_worker.results_ready.connect(self.update_search_results)
-            self.search_worker.timing_info.connect(self.update_timing_display)  # Connect timing signal
+            self.search_worker.timing_info.connect(self.update_timing_display)  
             self.search_worker.error_occurred.connect(self.search_error)
             self.search_worker.start()
             
@@ -446,7 +427,6 @@ class SearchApp(QWidget):
             print(f"SearchWorker import error: {e}")
 
     def update_timing_display(self, timing_data):
-        """Update timing information display - ALWAYS show both exact and fuzzy"""
         exact_time = timing_data.get('exact_time', 0)
         fuzzy_time = timing_data.get('fuzzy_time', 0)
         exact_count = timing_data.get('exact_count', 0)
@@ -454,18 +434,15 @@ class SearchApp(QWidget):
         total_scanned = timing_data.get('total_scanned', 0)
         missing_keywords = timing_data.get('missing_keywords', [])
         
-        # ALWAYS update exact match timing (Font 20, Color #E8EDED)
         exact_text = f"Exact Match: {total_scanned} CVs scanned in {exact_time:.0f}ms"
         if exact_count > 0:
             exact_text += f" • {exact_count} results found"
         else:
             exact_text += f" • 0 results found"
         self.exact_timing_label.setText(exact_text)
-        self.exact_timing_label.show()  # Always show
+        self.exact_timing_label.show()  
         
-        # ALWAYS update fuzzy match timing (Font 20, Color #A5C5BE)
         if fuzzy_time > 0 and missing_keywords:
-            # Fuzzy search was performed
             fuzzy_text = f"Fuzzy Match: {total_scanned} CVs scanned in {fuzzy_time:.0f}ms"
             if fuzzy_count > 0:
                 fuzzy_text += f" • {fuzzy_count} additional results"
@@ -473,18 +450,16 @@ class SearchApp(QWidget):
                 fuzzy_text += f" • 0 additional results"
             fuzzy_text += f" • Keywords: {', '.join(missing_keywords)}"
         else:
-            # No fuzzy search needed (all keywords found in exact match)
             fuzzy_text = f"Fuzzy Match: Not needed (all keywords found in exact match)"
         
         self.fuzzy_timing_label.setText(fuzzy_text)
-        self.fuzzy_timing_label.show()  # Always show
+        self.fuzzy_timing_label.show()  
 
     def update_search_results(self, results):
         """Update search results"""
         if hasattr(self, 'loading_dialog'):
             self.loading_dialog.close()
         
-        # Update data
         self.search_results = results
         self.cv_data = []
         for result in results:
@@ -498,7 +473,6 @@ class SearchApp(QWidget):
         self.current_page = 0
         self.updateCards()
         
-        # Update results count if results_label exists
         if hasattr(self, 'results_label'):
             self.results_label.setText(f"Found {len(self.cv_data)} resumes")
 
@@ -525,7 +499,6 @@ class SearchApp(QWidget):
 
     def updateCards(self):
         """Update displayed cards based on current page"""
-        # Clear existing widgets
         while self.grid.count():
             child = self.grid.takeAt(0)
             if child.widget():
@@ -556,11 +529,9 @@ class SearchApp(QWidget):
                 skills = {}
                 resume_id = None
             
-            # FIXED - Pass parent window reference
             card = CVCard(name, matches, skills, resume_id, parent_window=self)
             self.grid.addWidget(card, i // 3, i % 3)
 
-        # Update pagination info
         if hasattr(self, 'page_label'):
             total_pages = (len(self.cv_data) - 1) // self.items_per_page + 1 if self.cv_data else 1
             self.page_label.setText(f"Page {self.current_page + 1} of {total_pages}")

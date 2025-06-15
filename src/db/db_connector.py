@@ -9,7 +9,7 @@ import json
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 from config import DATABASE_CONFIG, ENCRYPTION_SETTINGS
 
-# Import custom encryption
+#  custom encryption
 try:
     from encryption.encryption_engine import AdvancedEncryption
     ENCRYPTION_ENABLED = ENCRYPTION_SETTINGS.get('enabled', False)
@@ -20,17 +20,17 @@ try:
         encryption_engine = AdvancedEncryption(master_key)
         print("✓ Encryption engine loaded and enabled")
     else:
-        print("⚠️ Encryption is disabled in config")
+        print("Encryption is disabled in config")
         
 except ImportError:
-    print("❌ Warning: Encryption engine not available")
+    print("Warning: Encryption engine not available")
     ENCRYPTION_ENABLED = False
     ENCRYPTED_FIELDS = []
 
 class DatabaseManager:
     def __init__(self, host=None, user=None, password=None, database=None):
         """Initialize database manager with connection parameters"""
-        # Use global config as default, allow override
+        # global config as default, allow override
         self.host = host or DATABASE_CONFIG['host']
         self.user = user or DATABASE_CONFIG['user'] 
         self.password = password or DATABASE_CONFIG['password'] 
@@ -219,7 +219,6 @@ class DatabaseManager:
             resume = cursor.fetchone()
             
             if resume:
-                # Decrypt sensitive fields
                 resume = self._decrypt_resume_data(resume)
                 
                 print(f"DEBUG - Resume {resume_id} decrypted: {resume.get('first_name', 'No name')}")
@@ -335,7 +334,7 @@ class DatabaseManager:
         try:
             cursor = self.connection.cursor()
             
-            # Encrypt sensitive data
+            # encrypt sensitive data
             encrypted_first_name = self._encrypt_field('first_name', first_name)
             encrypted_last_name = self._encrypt_field('last_name', last_name)
             encrypted_address = self._encrypt_field('address', address)
@@ -414,7 +413,7 @@ class DatabaseManager:
         try:
             cursor = self.connection.cursor(dictionary=True)
             
-            # Join resumes with profile data through cv_path matching
+            # join resumes with profile data through cv_path matching
             query = """
             SELECT r.*, 
                 ap.first_name, ap.last_name, ap.date_of_birth, 
@@ -435,7 +434,7 @@ class DatabaseManager:
             
             print(f"DEBUG - Found {len(resumes)} resumes with profile matching")
             
-            # Debug first few results
+            # debug first few results
             for i, resume in enumerate(resumes[:3]):
                 print(f"DEBUG - Resume {i+1}: {resume['filename']} -> {resume.get('first_name', 'No name')} {resume.get('last_name', '')}")
             
@@ -450,7 +449,7 @@ class DatabaseManager:
         try:
             cursor = self.connection.cursor(dictionary=True)
             
-            # Join with profile data
+            # join with profile data
             query = """
             SELECT r.*, 
                 ap.first_name, ap.last_name, ap.date_of_birth, 

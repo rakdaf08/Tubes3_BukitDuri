@@ -171,7 +171,6 @@ class BukitDuriApp(QWidget):
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     
-    # Dapatkan path absolut
     font_path = os.path.join(os.path.dirname(__file__), "../gui/font/Inter_24pt-Regular.ttf")
     font_path = os.path.abspath(font_path)
     
@@ -182,7 +181,6 @@ if __name__ == "__main__":
     if font_id != -1:
         families = QFontDatabase.applicationFontFamilies(font_id)
         print(f"Loaded font families: {families}")
-        # Gunakan nama font family yang benar
         app.setFont(QFont("Inter 24pt", 10))
     else:
         print("Failed to load Inter font, using default Arial")

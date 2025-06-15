@@ -6,22 +6,19 @@ from PyQt5.QtWidgets import *
 from PyQt5.QtCore import Qt, QThread, pyqtSignal, QTimer
 from PyQt5.QtGui import QFont
 
-# Fix import paths
 current_dir = os.path.dirname(os.path.abspath(__file__))
-parent_dir = os.path.dirname(current_dir)  # Go up from gui to src
-root_dir = os.path.dirname(parent_dir)     # Go up from src to root
+parent_dir = os.path.dirname(current_dir)  
+root_dir = os.path.dirname(parent_dir)    
 
-sys.path.append(parent_dir)  # Add src directory
-sys.path.append(root_dir)    # Add root directory
+sys.path.append(parent_dir) 
+sys.path.append(root_dir)    
 from config import DATABASE_CONFIG
 
-# Import SVG support
 try:
     from PyQt5.QtSvg import QSvgWidget
 except ImportError:
     print("QSvgWidget not available, using text fallback")
 
-# Import database components
 try:
     from db.db_connector import DatabaseManager
     from core.extractor import extract_text_from_pdf, extract_profile_data
@@ -42,7 +39,7 @@ class DatabaseSetupWorker(QThread):
             self.progress_update.emit("Initializing database setup...")
             self.progress_percentage.emit(5)
             
-            # Call the setup function with progress callbacks
+            # call the setup function with progress callbacks
             success = self.setup_database_with_progress()
             
             self.progress_update.emit("Setup completed!" if success else "Setup failed!")
@@ -56,7 +53,7 @@ class DatabaseSetupWorker(QThread):
     
     def setup_database_with_progress(self):
         try:
-            # Drop existing database first
+            # drop existing database first
             self.progress_update.emit("Dropping existing database...")
             self.progress_percentage.emit(10)
             
@@ -77,7 +74,7 @@ class DatabaseSetupWorker(QThread):
             self.progress_update.emit("Creating fresh database...")
             self.progress_percentage.emit(15)
             
-            # Use global config instead of hardcoded values
+            # global config instead of hardcoded values
             db = DatabaseManager()
             
             self.progress_update.emit("Creating database and tables...")
@@ -94,12 +91,10 @@ class DatabaseSetupWorker(QThread):
                 self.progress_update.emit("Failed to connect to database")
                 return False
             
-            # Run seeding if exists - PASS DATABASE_CONFIG CORRECTLY
             self.progress_update.emit("Running seeding SQL...")
             self.progress_percentage.emit(30)
-            self.run_seeding_sql(DATABASE_CONFIG)  # Use global config instead of undefined db_config
+            self.run_seeding_sql(DATABASE_CONFIG)  
             
-            # Add profile columns
             self.progress_update.emit("Adding profile columns...")
             self.progress_percentage.emit(35)
             self.add_profile_columns_to_resumes(db)
@@ -107,7 +102,6 @@ class DatabaseSetupWorker(QThread):
             self.progress_update.emit("Loading resume data from PDF files...")
             self.progress_percentage.emit(40)
             
-            # Load data with progress updates
             self.load_resume_data_with_progress(db)
             
             self.progress_update.emit("Finalizing setup...")
@@ -127,7 +121,6 @@ class DatabaseSetupWorker(QThread):
             seeding_file = os.path.join(root_dir, 'tubes3_seeding.sql')
             if os.path.exists(seeding_file):
                 print(f"Found seeding file: {seeding_file}")
-                # Run MySQL command to execute the SQL file
                 cmd = [
                     'mysql',
                     '-h', db_config['host'],
@@ -135,7 +128,6 @@ class DatabaseSetupWorker(QThread):
                     db_config['database']
                 ]
                 
-                # Add password if not empty
                 if db_config['password']:
                     cmd.extend(['-p' + db_config['password']])
                 
@@ -161,7 +153,6 @@ class DatabaseSetupWorker(QThread):
         try:
             cursor = db.connection.cursor()
             
-            # Check if columns already exist
             cursor.execute("DESCRIBE resumes")
             existing_columns = [row[0] for row in cursor.fetchall()]
             
@@ -203,14 +194,13 @@ class DatabaseSetupWorker(QThread):
             print(f"PDF directory not found: {pdf_dir}")
             return
         
-        # Count total files
         total_files = 0
         categories = []
         for category in os.listdir(pdf_dir):
             category_path = os.path.join(pdf_dir, category)
             if os.path.isdir(category_path):
                 pdf_files = [f for f in os.listdir(category_path) if f.endswith('.pdf')]
-                if pdf_files:  # Only add categories with PDF files
+                if pdf_files:  # only add categories with PDF files
                     total_files += len(pdf_files)
                     categories.append((category, pdf_files))
         
@@ -219,7 +209,6 @@ class DatabaseSetupWorker(QThread):
             print("No PDF files found")
             return
         
-        # Process files with progress updates
         processed = 0
         loaded_count = 0
         
@@ -235,12 +224,11 @@ class DatabaseSetupWorker(QThread):
                 pdf_path = os.path.join(pdf_dir, category, filename)
                 
                 try:
-                    # Extract and process
                     extracted_text = extract_text_from_pdf(pdf_path)
                     if extracted_text:
                         profile = extract_profile_data(extracted_text)
                         
-                        # Prepare data for insertion
+                        # prepare data for insertion
                         skills = ", ".join(profile.get('skills', []))[:2000]
                         
                         experience_list = []
@@ -258,7 +246,7 @@ class DatabaseSetupWorker(QThread):
                         gpa = float(profile['gpa'][0]) if profile.get('gpa') else None
                         certifications = ", ".join(profile.get('certifications', []))[:1000]
                         
-                        # Insert to database
+                        # insert to database
                         resume_id = db.insert_resume(
                             filename=filename,
                             category=category,
@@ -273,7 +261,7 @@ class DatabaseSetupWorker(QThread):
                         
                         if resume_id and resume_id > 0:
                             loaded_count += 1
-                            # Only print every 10th success to avoid spam
+                            # only print every 10th success to avoid spam
                             if loaded_count % 10 == 0:
                                 print(f"✓ Inserted {loaded_count} files so far...")
                         else:
@@ -297,7 +285,7 @@ class DatabaseSetupWorker(QThread):
         print(f"Final: Successfully loaded {loaded_count} out of {processed} files processed")
         self.progress_update.emit(f"Loaded {loaded_count} resumes successfully!")
         
-        # Show final statistics
+        # show final statistics
         self.progress_update.emit(f"Setup completed: {loaded_count}/{total_files} files loaded into database")
 
 class DatabaseSetupGUI(QWidget):
@@ -315,23 +303,23 @@ class DatabaseSetupGUI(QWidget):
         layout.setAlignment(Qt.AlignCenter)
         layout.setSpacing(20)
         
-        # Logo section
+        # logo section
         logo_layout = QHBoxLayout()
         logo_path = os.path.join(root_dir, "src", "gui", "logo_bukdur.svg")
         logo = QSvgWidget(logo_path)
-        logo.setFixedSize(344, 179)  # Same size as landing
+        logo.setFixedSize(344, 179)  # same size as landing
         logo_layout.addWidget(logo, alignment=Qt.AlignCenter)
         
         layout.addLayout(logo_layout)
         
-        # Setup message
+        # setup message
         self.setup_label = QLabel("Setting up database...")
         self.setup_label.setFont(QFont("Arial", 14))
         self.setup_label.setStyleSheet("color: white;")
         self.setup_label.setAlignment(Qt.AlignCenter)
         layout.addWidget(self.setup_label)
         
-        # Progress bar
+        # progress bar
         self.progress_bar = QProgressBar()
         self.progress_bar.setFixedHeight(30)
         self.progress_bar.setFixedWidth(400)  
@@ -351,14 +339,14 @@ class DatabaseSetupGUI(QWidget):
         """)
         layout.addWidget(self.progress_bar, alignment=Qt.AlignCenter)
         
-        # Status label
+        # status label
         self.status_label = QLabel("Initializing...")
         self.status_label.setFont(QFont("Arial", 12))
         self.status_label.setStyleSheet("color: #B0B0B0;")
         self.status_label.setAlignment(Qt.AlignCenter)
         layout.addWidget(self.status_label)
         
-        # Spinning animation
+        # spinning animation
         self.spinner_label = QLabel("⟳")
         self.spinner_label.setFont(QFont("Arial", 24))
         self.spinner_label.setStyleSheet("color: #00FFC6;")
@@ -421,13 +409,13 @@ class DatabaseSetupGUI(QWidget):
             self.layout().addWidget(retry_btn)
             
     def retry_setup(self):
-        # Remove retry button
+        # remove retry button
         for i in reversed(range(self.layout().count())):
             widget = self.layout().itemAt(i).widget()
             if isinstance(widget, QPushButton):
                 widget.setParent(None)
         
-        # Reset UI
+        # reset UI
         self.spinner_label.setText("⟳")
         self.spinner_label.setStyleSheet("color: #00FFC6; font-size: 24px;")
         self.setup_label.setText("Retrying database setup...")
@@ -435,7 +423,6 @@ class DatabaseSetupGUI(QWidget):
         self.status_label.setText("Initializing...")
         self.start_setup()
 
-# Test the setup GUI directly
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     setup_gui = DatabaseSetupGUI()
