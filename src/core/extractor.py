@@ -45,82 +45,121 @@ def extract_profile_data(text: str) -> dict:
                 overview = match.group(1).strip()
                 if len(overview) > 30:
                     profile["overview"] = re.sub(r'\s+', ' ', overview)
-                    print(f"DEBUG - Found overview: {len(overview)} chars")
                     break
 
-        # IMPROVED SKILLS EXTRACTION
+        # SIGNIFICANTLY IMPROVED SKILLS EXTRACTION based on HR examples
         skills_patterns = [
+            # Direct Skills section
             r"(?i)(?:Skills|Technical\s+Skills|Core\s+Competencies|Highlights|Key\s+Skills|Programming\s+Languages|Technologies)\s*:?\s*\n(.*?)(?=\n\s*(?:Experience|Work\s+History|Job\s+History|Education|Employment|Training|Accomplishments|Professional\s+Experience|EXPERIENCE|EDUCATION)|\Z)",
-            r"(?i)Skills[\s:]*([A-Za-z\s,\.\-&/+#]+(?:,\s*[A-Za-z\s\.\-&/+#]+)*)",
+            # Skills at end of resume (common pattern in HR examples)
+            r"(?i)Skills\s*:?\s*\n?(.*?)(?=\n\s*(?:Professional\s+Affiliations|Additional\s+Information|References|Interests|Education|Activities)|\Z)",
+            # Inline skills listing
+            r"(?i)Skills[\s:]*([A-Za-z\s,\.\-&/+#()]+(?:,\s*[A-Za-z\s\.\-&/+#()]+)*)",
         ]
+        
+        # Enhanced skill extraction from HR patterns
+        skills_found = set()
         
         for pattern in skills_patterns:
             match = re.search(pattern, text, re.DOTALL)
             if match:
                 skills_text = match.group(1).strip()
-                print(f"DEBUG - Found skills section: {skills_text[:100]}...")
-                
+                                
                 # Extract skills from various formats
-                skills = []
+                current_skills = []
                 
                 # Split by common delimiters
-                for delimiter in [',', ';', '•', '\n', '|']:
+                for delimiter in [',', ';', '•', '\n', '|', '·']:
                     if delimiter in skills_text:
-                        skills.extend([skill.strip() for skill in skills_text.split(delimiter)])
+                        current_skills.extend([skill.strip() for skill in skills_text.split(delimiter)])
+                
+                # If no delimiters, try to extract from continuous text
+                if not current_skills:
+                    current_skills = [skills_text]
                 
                 # Clean and filter skills
-                cleaned_skills = []
-                for skill in skills:
-                    skill = re.sub(r'[^\w\s\+\#\.\-]', '', skill).strip()
-                    if len(skill) > 1 and len(skill) < 30 and skill.lower() not in ['skills', 'technical skills']:
-                        cleaned_skills.append(skill)
+                for skill in current_skills:
+                    skill = re.sub(r'[^\w\s\+\#\.\-/()]', '', skill).strip()
+                    if len(skill) > 1 and len(skill) < 40 and skill.lower() not in ['skills', 'technical skills', 'core competencies']:
+                        skills_found.add(skill)
                 
-                profile["skills"].extend(cleaned_skills)
-                if cleaned_skills:
+                if skills_found:
                     break
 
-        # FIXED EXPERIENCE EXTRACTION - Split multiple experiences
+        # Extract additional skills from text based on HR examples
+        hr_skill_keywords = [
+            # HR specific skills from examples
+            'HRIS', 'HR', 'Human Resources', 'Payroll', 'Benefits', 'Recruitment', 'Performance Management',
+            'Employee Relations', 'Compliance', 'Training', 'Development', 'FMLA', 'Workers Compensation',
+            'ADP', 'PeopleSoft', 'SAP', 'Excel', 'Microsoft Office', 'Database', 'Policies', 'Procedures',
+            'Hiring', 'Onboarding', 'Exit Interviews', 'Safety', 'OSHA', 'Compensation', 'Benefits Administration',
+            'Employment Law', 'Labor Relations', 'Organizational Development', 'Talent Management',
+            # Technical skills from examples
+            'Word', 'PowerPoint', 'Outlook', 'Windows', 'Database Management', 'Report Writing',
+            'Data Entry', 'Filing', 'Customer Service', 'Project Management', 'Leadership',
+            'Communication', 'Problem Solving', 'Team Building', 'Conflict Resolution',
+            'Time Management', 'Multitasking', 'Detail Oriented', 'Analytical', 'Organizational'
+        ]
+        
+        for skill in hr_skill_keywords:
+            if re.search(rf'\b{re.escape(skill)}\b', text, re.IGNORECASE):
+                skills_found.add(skill)
+        
+        profile["skills"] = list(skills_found)[:25]  # Limit to 25 skills
+
+        # SIGNIFICANTLY IMPROVED EXPERIENCE EXTRACTION based on HR examples
         exp_patterns = [
+            # Standard Experience section
             r"(?i)(?:Experience|Work\s+History|Professional\s+Experience|Employment\s+History|Job\s+History)\s*:?\s*\n(.*?)(?=\n\s*(?:Education|Skills|Certifications|References|Training|EDUCATION|SKILLS)|\Z)",
+            # Experience without header (date-based detection)
+            r"((?:\d{2}/\d{4}\s+to\s+\d{2}/\d{4}|\d{2}/\d{4}\s+to\s+Current|\d{2}/\d{4}\s+to\s+\d{2}/\d{4}).*?)(?=\n\s*(?:Education|Skills|Certifications)|\Z)",
         ]
         
         for pattern in exp_patterns:
             match = re.search(pattern, text, re.DOTALL)
             if match:
                 exp_section = match.group(1).strip()
-                print(f"DEBUG - Found experience section: {exp_section[:100]}...")
+                                
+                # IMPROVED: Split by job entries using multiple patterns
+                experiences = []
                 
-                # SPLIT BY DATE PATTERNS to separate multiple jobs
-                date_pattern = r'\b(?:0[1-9]|1[0-2])/(?:19|20)\d{2}\b'
-                
-                # Find all date matches with their positions
+                # Pattern 1: Date ranges (MM/YYYY to MM/YYYY or MM/YYYY to Current)
+                date_pattern = r'(\d{2}/\d{4}\s+to\s+(?:\d{2}/\d{4}|Current))'
                 date_matches = list(re.finditer(date_pattern, exp_section))
                 
-                if len(date_matches) >= 2:  # Multiple jobs found
-                    print(f"DEBUG - Found {len(date_matches)} date patterns, splitting experiences")
-                    
-                    experiences = []
+                if len(date_matches) >= 1:                    
                     for i in range(len(date_matches)):
                         start_pos = date_matches[i].start()
                         end_pos = date_matches[i+1].start() if i+1 < len(date_matches) else len(exp_section)
                         
                         job_text = exp_section[start_pos:end_pos].strip()
                         
-                        if len(job_text) > 20:  # Valid job entry
-                            exp_entry = parse_single_experience(job_text)
+                        if len(job_text) > 50:  # Valid job entry
+                            exp_entry = parse_single_experience_improved(job_text)
                             if exp_entry:
                                 experiences.append(exp_entry)
-                    
-                    profile["experience"] = experiences
-                    print(f"DEBUG - Extracted {len(experiences)} separate experiences")
                 else:
-                    # Single experience or fallback
-                    exp_entry = parse_single_experience(exp_section)
-                    if exp_entry:
-                        profile["experience"] = [exp_entry]
+                    # Pattern 2: Company Name patterns
+                    company_pattern = r'(Company\s+Name[^\n]*\n.*?)(?=Company\s+Name|\Z)'
+                    company_matches = list(re.finditer(company_pattern, exp_section, re.DOTALL))
+                    
+                    if len(company_matches) >= 1:
+                        for match in company_matches:
+                            job_text = match.group(1).strip()
+                            if len(job_text) > 50:
+                                exp_entry = parse_single_experience_improved(job_text)
+                                if exp_entry:
+                                    experiences.append(exp_entry)
+                    else:
+                        # Fallback: Single experience
+                        exp_entry = parse_single_experience_improved(exp_section)
+                        if exp_entry:
+                            experiences = [exp_entry]
+                
+                profile["experience"] = experiences
                 break
 
-        # FIXED EDUCATION EXTRACTION - Split multiple degrees
+        # IMPROVED EDUCATION EXTRACTION
         edu_patterns = [
             r"(?i)(?:Education|Educational\s+Background|Academic\s+Background)\s*:?\s*\n(.*?)(?=\n\s*(?:Experience|Work|Skills|Certifications|References|Training|EXPERIENCE|WORK|SKILLS)|\Z)",
         ]
@@ -128,143 +167,237 @@ def extract_profile_data(text: str) -> dict:
         for pattern in edu_patterns:
             match = re.search(pattern, text, re.DOTALL)
             if match:
-                edu_section = match.group(1).strip()
-                print(f"DEBUG - Found education section: {edu_section[:100]}...")
-                
-                # SPLIT BY DEGREE KEYWORDS to separate multiple degrees
-                degree_keywords = ['Master of Science', 'Master of Arts', 'Bachelor of Science', 'Bachelor of Arts', 'Master', 'Bachelor', 'PhD', 'Doctorate']
-                
+                edu_section = match.group(1).strip()                
                 education_entries = []
-                remaining_text = edu_section
                 
-                # Find degree positions
+                # Split by degree keywords
+                degree_keywords = ['Master of Science', 'Master of Arts', 'Bachelor of Science', 'Bachelor of Arts', 
+                                 'Master', 'Bachelor', 'PhD', 'Doctorate', 'Associate', 'Diploma']
+                
                 degree_positions = []
                 for keyword in degree_keywords:
-                    for match in re.finditer(rf'\b{re.escape(keyword)}\b', remaining_text, re.IGNORECASE):
+                    for match in re.finditer(rf'\b{re.escape(keyword)}\b', edu_section, re.IGNORECASE):
                         degree_positions.append((match.start(), keyword, match.group()))
                 
-                # Sort by position
                 degree_positions.sort(key=lambda x: x[0])
                 
-                if len(degree_positions) >= 2:  # Multiple degrees found
-                    print(f"DEBUG - Found {len(degree_positions)} degrees, splitting education")
-                    
+                if len(degree_positions) >= 1:                    
                     for i in range(len(degree_positions)):
                         start_pos = degree_positions[i][0]
                         end_pos = degree_positions[i+1][0] if i+1 < len(degree_positions) else len(edu_section)
                         
                         degree_text = edu_section[start_pos:end_pos].strip()
                         
-                        if len(degree_text) > 10:  # Valid degree entry
-                            edu_entry = parse_single_education(degree_text)
+                        if len(degree_text) > 10:
+                            edu_entry = parse_single_education_improved(degree_text)
                             if edu_entry:
                                 education_entries.append(edu_entry)
                     
                     profile["education"] = education_entries
-                    print(f"DEBUG - Extracted {len(education_entries)} separate education entries")
                 else:
-                    # Single education or fallback
-                    edu_entry = parse_single_education(edu_section)
+                    # Single education entry
+                    edu_entry = parse_single_education_improved(edu_section)
                     if edu_entry:
                         profile["education"] = [edu_entry]
                 break
-
-        # Add common technical skills found in text
-        tech_skills = ['Python', 'Java', 'JavaScript', 'SQL', 'HTML', 'CSS', 'React', 'Node.js', 'Git', 'Linux']
-        for skill in tech_skills:
-            if skill.lower() in text.lower() and skill not in profile["skills"]:
-                profile["skills"].append(skill)
 
     except Exception as e:
         print(f"DEBUG - Error in extract_profile_data: {e}")
 
     # Clean up and remove duplicates
-    profile["skills"] = list(dict.fromkeys(profile["skills"]))[:20]
+    profile["skills"] = list(dict.fromkeys(profile["skills"]))[:25]
     profile["certifications"] = list(dict.fromkeys(profile["certifications"]))[:5]
     profile["achievements"] = list(dict.fromkeys(profile["achievements"]))[:5]
     
     return profile
 
-def parse_single_experience(job_text):
-    """Parse a single job experience entry"""
+def parse_single_experience_improved(job_text):
+    """IMPROVED: Parse a single job experience entry with better date extraction"""
     try:
         lines = [line.strip() for line in job_text.split('\n') if line.strip()]
         
-        # Extract dates (first line usually contains dates)
-        date_pattern = r'(?:0[1-9]|1[0-2])/(?:19|20)\d{2}'
+        # IMPROVED: Extract dates with comprehensive patterns based on your data
+        date_patterns = [
+            # MM/YYYY to MM/YYYY or Current patterns
+            r'(\d{1,2}/\d{4})\s+to\s+(\d{1,2}/\d{4})',
+            r'(\d{1,2}/\d{4})\s+to\s+(Current)',
+            # Month YYYY to Month YYYY patterns  
+            r'(\w+\s+\d{4})\s+to\s+(\w+\s+\d{4})',
+            r'(\w+\s+\d{4})\s+to\s+(Current)',
+            # YYYY to YYYY patterns
+            r'(\d{4})\s+to\s+(\d{4})',
+            r'(\d{4})\s+to\s+(Current)',
+            # MM/YYYY - MM/YYYY patterns (with dash)
+            r'(\d{1,2}/\d{4})\s*-\s*(\d{1,2}/\d{4})',
+            r'(\d{1,2}/\d{4})\s*-\s*(Current)',
+            # Month Year - Month Year patterns
+            r'(\w+\s+\d{4})\s*-\s*(\w+\s+\d{4})',
+            r'(\w+\s+\d{4})\s*-\s*(Current)',
+            # Present variations
+            r'(\d{1,2}/\d{4})\s+to\s+(Present)',
+            r'(\w+\s+\d{4})\s+to\s+(Present)',
+        ]
+        
+        start_date = ""
+        end_date = ""
         period = "Period not specified"
         
-        for line in lines[:2]:
-            if re.search(date_pattern, line):
-                period = line
+        for pattern in date_patterns:
+            date_match = re.search(pattern, job_text, re.IGNORECASE)
+            if date_match:
+                start_date = date_match.group(1).strip()
+                end_date = date_match.group(2).strip()
+                
+                # Normalize "Current" and "Present" to "Now"
+                if end_date.lower() in ['current', 'present']:
+                    end_date = "Now"
+                
+                period = f"{start_date} to {end_date}"
                 break
         
-        # Extract title and company
-        title = "Position"
-        company = "Company"
-        description = job_text
+        # If no paired dates found, try to find individual dates
+        if not start_date:
+            single_date_patterns = [
+                r'(\d{1,2}/\d{4})',
+                r'(\w+\s+\d{4})',
+                r'(\d{4})'
+            ]
+            
+            for pattern in single_date_patterns:
+                matches = re.findall(pattern, job_text)
+                if len(matches) >= 2:
+                    start_date = matches[0]
+                    end_date = matches[1]
+                    period = f"{start_date} to {end_date}"
+                    break
+                elif len(matches) == 1:
+                    start_date = matches[0]
+                    end_date = "Now"
+                    period = f"{start_date} to Now"
+                    break
         
-        # Look for job titles in first few lines
-        title_keywords = ['manager', 'analyst', 'engineer', 'director', 'specialist', 'coordinator', 'assistant', 'developer', 'consultant']
-        for line in lines[:3]:
-            if any(keyword in line.lower() for keyword in title_keywords):
-                title = line[:50]  # Limit title length
+        # Extract job title - improved patterns based on HR examples
+        title = ""
+        title_patterns = [
+            r'(?:HR\s+)?(?:Manager|Director|Analyst|Specialist|Coordinator|Assistant|Representative|Administrator|Supervisor|Generalist|Clerk)',
+            r'(?:Human\s+Resources?\s+)?(?:Manager|Director|Specialist|Coordinator)',
+            r'(?:Senior\s+)?(?:HR\s+)?(?:Analyst|Specialist|Manager)',
+            r'(?:Benefits?\s+)?(?:Administrator|Coordinator)',
+            r'(?:Recruiting?\s+)?(?:Coordinator|Specialist)',
+        ]
+        
+        for pattern in title_patterns:
+            title_match = re.search(pattern, job_text, re.IGNORECASE)
+            if title_match:
+                # Get more context around the match
+                for line in lines:
+                    if title_match.group().lower() in line.lower():
+                        title = line[:80]  # Limit length
+                        break
                 break
         
-        # Extract company (usually after title)
-        for line in lines[:3]:
-            if 'company' in line.lower() or 'corp' in line.lower() or 'inc' in line.lower():
-                company = line[:50]
+        # Extract company - improved patterns
+        company = ""
+        company_patterns = [
+            r'Company\s+Name[^\n]*',
+            r'(?:at\s+)?([A-Z][a-zA-Z\s&,\.]+(?:Inc|Corp|LLC|Ltd|Company|Corporation|Group))',
+            r'([A-Z][a-zA-Z\s&,\.]+(?:University|College|Hospital|Medical|Center))',
+        ]
+        
+        for pattern in company_patterns:
+            company_match = re.search(pattern, job_text)
+            if company_match:
+                company = company_match.group().replace('Company Name', '').strip()[:60]
                 break
+        
+        # Extract description - focus on responsibilities and achievements
+        description_lines = []
+        responsibility_keywords = [
+            'responsibilities', 'duties', 'managed', 'coordinated', 'developed', 'implemented',
+            'administered', 'supervised', 'conducted', 'maintained', 'processed', 'assisted',
+            'provided', 'ensured', 'handled', 'recruited', 'trained', 'analyzed'
+        ]
+        
+        for line in lines:
+            line_lower = line.lower()
+            if any(keyword in line_lower for keyword in responsibility_keywords):
+                if len(line) > 20 and not re.match(r'^\d{1,2}/\d{4}', line):
+                    description_lines.append(line)
+        
+        description = ' '.join(description_lines[:3]) if description_lines else job_text[:300]
         
         return {
             'title': title,
             'company': company,
             'period': period,
-            'start': period.split(' to ')[0] if ' to ' in period else 'Start',
-            'end': period.split(' to ')[1] if ' to ' in period else 'End',
-            'description': description[:300]  # Limit description
+            'start': start_date,
+            'end': end_date,
+            'description': description[:400]
         }
     except Exception as e:
         print(f"DEBUG - Error parsing experience: {e}")
         return None
 
-def parse_single_education(edu_text):
-    """Parse a single education entry"""
+def parse_single_education_improved(edu_text):
+    """IMPROVED: Parse a single education entry based on HR examples"""
     try:
         lines = [line.strip() for line in edu_text.split('\n') if line.strip()]
         
-        # Extract degree
-        degree_keywords = ['Master of Science', 'Master of Arts', 'Bachelor of Science', 'Bachelor of Arts', 'Master', 'Bachelor', 'PhD']
+        # Extract degree with improved patterns
+        degree_patterns = [
+            r'(Master\s+of\s+(?:Science|Arts|Business\s+Administration|Education))',
+            r'(Bachelor\s+of\s+(?:Science|Arts|Commerce))',
+            r'(Master|Bachelor|PhD|Doctorate|Associate)',
+            r'(MBA|MS|MA|BS|BA|PhD)'
+        ]
+        
         degree = "Degree"
-        
-        for keyword in degree_keywords:
-            if keyword.lower() in edu_text.lower():
-                degree = keyword
+        for pattern in degree_patterns:
+            degree_match = re.search(pattern, edu_text, re.IGNORECASE)
+            if degree_match:
+                degree = degree_match.group(1)
                 break
         
-        # Extract institution
-        institution = "Institution"
-        institution_keywords = ['university', 'college', 'institute']
-        for line in lines:
-            if any(keyword in line.lower() for keyword in institution_keywords):
-                institution = line[:60]
-                break
-        
-        # Extract year
-        year_pattern = r'\b(19|20)\d{2}\b'
-        year_match = re.search(year_pattern, edu_text)
-        date = year_match.group(0) if year_match else "Year not specified"
-        
-        # Extract field of study
+        # Extract field of study - improved patterns
         field = ""
-        field_indicators = [':', 'in ', 'of ']
-        for indicator in field_indicators:
-            if indicator in edu_text:
-                parts = edu_text.split(indicator)
-                if len(parts) > 1:
-                    field = parts[1].split('\n')[0].strip()[:50]
-                    break
+        field_patterns = [
+            r'(?:in\s+|:\s*)([A-Za-z\s]+(?:Science|Arts|Management|Engineering|Studies|Administration))',
+            r'(?:Major|Field|Study):\s*([A-Za-z\s]+)',
+            r'(?:Bachelor|Master|PhD)\s+(?:of\s+)?(?:Science|Arts)\s*:\s*([A-Za-z\s]+)',
+        ]
+        
+        for pattern in field_patterns:
+            field_match = re.search(pattern, edu_text, re.IGNORECASE)
+            if field_match:
+                field = field_match.group(1).strip()[:50]
+                break
+        
+        # Extract institution - improved patterns
+        institution = "Institution"
+        institution_patterns = [
+            r'([A-Z][a-zA-Z\s]+(?:University|College|Institute|School))',
+            r'(University\s+of\s+[A-Za-z\s]+)',
+            r'([A-Z][a-zA-Z\s]+\s+State\s+University)',
+        ]
+        
+        for pattern in institution_patterns:
+            inst_match = re.search(pattern, edu_text)
+            if inst_match:
+                institution = inst_match.group(1)[:70]
+                break
+        
+        # Extract year - multiple patterns
+        year_patterns = [
+            r'\b(19|20)\d{2}\b',
+            r'(?:Graduated|Completed|Finished):\s*(\d{4})',
+        ]
+        
+        date = "Year not specified"
+        for pattern in year_patterns:
+            year_match = re.search(pattern, edu_text)
+            if year_match:
+                date = year_match.group().strip()
+                break
         
         return {
             'degree': degree,
@@ -273,9 +406,9 @@ def parse_single_education(edu_text):
             'date': date
         }
     except Exception as e:
-        print(f"DEBUG - Error pasdasdaarsing education: {e}")
+        print(f"DEBUG - Error parsing education: {e}")
         return None
-        
+
 def print_profile(profile: dict):
     """Print formatted profile data"""
     print("=== EXTRACTED PROFILE DATA ===")

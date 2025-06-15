@@ -2,6 +2,7 @@ DATABASE_CONFIG = {
     'host': 'localhost',
     'user': 'root',
     'password': '',  # Ganti password di sini saja
+    'password': '12345678',  # Ganti password di sini saja
     'database': 'Tubes3Stima'
 }
 
