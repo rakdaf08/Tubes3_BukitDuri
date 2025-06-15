@@ -65,7 +65,7 @@ class DatabaseSetupWorker(QThread):
                 temp_conn = mysql.connector.connect(
                     host='localhost',
                     user='root',
-                    password=''
+                    password='12345678'
                 )
                 cursor = temp_conn.cursor()
                 cursor.execute("DROP DATABASE IF EXISTS Tubes3Stima")
@@ -80,7 +80,7 @@ class DatabaseSetupWorker(QThread):
             db_config = {
                 'host': 'localhost',
                 'user': 'root',
-                'password': '',
+                'password': '12345678',
                 'database': 'Tubes3Stima',
             }
             

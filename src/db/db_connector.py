@@ -6,7 +6,7 @@ from datetime import datetime
 import json
 
 class DatabaseManager:
-    def __init__(self, host="localhost", user="root", password="", database="Tubes3Stima"):
+    def __init__(self, host="localhost", user="root", password="12345678", database="Tubes3Stima"):
         """Initialize database manager with connection parameters"""
         self.host = host
         self.user = user
@@ -20,7 +20,7 @@ class DatabaseManager:
             self.connection = mysql.connector.connect(
                 host=self.host,
                 user=self.user,
-                password="",
+                password="12345678",
                 database=self.database,
                 autocommit=True
             )

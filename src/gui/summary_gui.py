@@ -8,6 +8,13 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtGui import QFont, QCursor
 from PyQt5.QtCore import Qt, QSize
 
+# Add path for imports
+current_dir = os.path.dirname(os.path.abspath(__file__))
+parent_dir = os.path.dirname(current_dir)
+sys.path.append(parent_dir)
+
+from core.extractor import extract_profile_data
+
 class SummaryPage(QWidget):
     def __init__(self, resume_data=None):
         super().__init__()
@@ -132,7 +139,7 @@ class SummaryPage(QWidget):
         # Simple name label without background
         name_label = QLabel(display_name)
         name_label.setFont(QFont("Arial", 42, QFont.Bold))
-        name_label.setStyleSheet("color: #34BD95; margin: 20px 0px;")  # Changed color, removed background
+        name_label.setStyleSheet("color: #34BD95; margin: 20px 0px;")
         name_label.setAlignment(Qt.AlignCenter)
         layout.addWidget(name_label)
 
@@ -142,9 +149,9 @@ class SummaryPage(QWidget):
         profile_main_layout = QHBoxLayout()
         profile_main_layout.setSpacing(20)
         
-        # Left container - Personal Info (bigger size again)
+        # Left container - Personal Info
         left_container = QWidget()
-        left_container.setFixedSize(530, 350)  # Increased height from 320 to 350
+        left_container.setFixedSize(530, 350)
         left_container.setStyleSheet("""
             QWidget {
                 background-color: #037F68;
@@ -153,8 +160,8 @@ class SummaryPage(QWidget):
             }
         """)
         left_layout = QVBoxLayout(left_container)
-        left_layout.setContentsMargins(25, 30, 25, 30)  # Increased top/bottom margins
-        left_layout.setSpacing(15)  # Increased spacing between sections
+        left_layout.setContentsMargins(25, 30, 25, 30)
+        left_layout.setSpacing(15)
         
         # Birth date
         birth_date = self.resume_data.get('date_of_birth', '05-19-2025')
@@ -170,8 +177,8 @@ class SummaryPage(QWidget):
         birth_label.setStyleSheet("color: white; background: transparent; margin: 0px; padding: 3px 0px;")
         birth_value = QLabel(birth_date)
         birth_value.setFont(QFont("Arial", 20))
-        birth_value.setStyleSheet("color: white; background: transparent; margin: 0px; padding: 3px 0px 8px 0px;")  # More padding
-        birth_value.setMinimumHeight(30)  # Ensure minimum height
+        birth_value.setStyleSheet("color: white; background: transparent; margin: 0px; padding: 3px 0px 8px 0px;")
+        birth_value.setMinimumHeight(30)
         left_layout.addWidget(birth_label)
         left_layout.addWidget(birth_value)
         
@@ -184,9 +191,9 @@ class SummaryPage(QWidget):
         address_label.setStyleSheet("color: white; background: transparent; margin: 0px; padding: 3px 0px;")
         address_value = QLabel(address)
         address_value.setFont(QFont("Arial", 20))
-        address_value.setStyleSheet("color: white; background: transparent; margin: 0px; padding: 3px 0px 8px 0px;")  # More padding
+        address_value.setStyleSheet("color: white; background: transparent; margin: 0px; padding: 3px 0px 8px 0px;")
         address_value.setWordWrap(True)
-        address_value.setMinimumHeight(30)  # Ensure minimum height
+        address_value.setMinimumHeight(30)
         left_layout.addWidget(address_label)
         left_layout.addWidget(address_value)
         
@@ -199,8 +206,8 @@ class SummaryPage(QWidget):
         phone_label.setStyleSheet("color: white; background: transparent; margin: 0px; padding: 3px 0px;")
         phone_value = QLabel(phone)
         phone_value.setFont(QFont("Arial", 20))
-        phone_value.setStyleSheet("color: white; background: transparent; margin: 0px; padding: 3px 0px 8px 0px;")  # More padding
-        phone_value.setMinimumHeight(30)  # Ensure minimum height
+        phone_value.setStyleSheet("color: white; background: transparent; margin: 0px; padding: 3px 0px 8px 0px;")
+        phone_value.setMinimumHeight(30)
         left_layout.addWidget(phone_label)
         left_layout.addWidget(phone_value)
         
@@ -215,7 +222,7 @@ class SummaryPage(QWidget):
         role_value.setFont(QFont("Arial", 20))
         role_value.setStyleSheet("color: #FFE066; background: transparent; font-weight: bold; margin: 0px; padding: 3px 0px;")
         role_value.setWordWrap(True)
-        role_value.setMinimumHeight(30)  # Ensure minimum height
+        role_value.setMinimumHeight(30)
         left_layout.addWidget(role_label)
         left_layout.addWidget(role_value)
 
@@ -228,7 +235,7 @@ class SummaryPage(QWidget):
         
         # Skills title - BOLD and centered vertically with profile info
         skills_title = QLabel("Skills")
-        skills_title.setFont(QFont("Arial", 24, QFont.Bold))  # Added Bold
+        skills_title.setFont(QFont("Arial", 24, QFont.Bold))
         skills_title.setStyleSheet("color: white; background: transparent;")
         skills_title.setAlignment(Qt.AlignCenter)
         right_layout.addWidget(skills_title)
@@ -263,38 +270,6 @@ class SummaryPage(QWidget):
             return value.date().strftime('%m-%d-%Y')
         else:
             return str(value)
-
-    def create_skills_section(self, layout):
-        """Create skills section with pagination"""
-        # Skills title
-        skills_title = QLabel("Skills & Competencies")
-        skills_title.setFont(QFont("Arial", 28, QFont.Bold))
-        skills_title.setStyleSheet("color: #00FFC6; margin: 20px 0px 15px 0px;")
-        skills_title.setAlignment(Qt.AlignCenter)
-        layout.addWidget(skills_title)
-
-        # Get all skills
-        all_skills = self.extract_skills_from_data()
-
-        # Skills container
-        self.skills_container = QGroupBox()
-        self.skills_container.setStyleSheet("""
-            QGroupBox {
-                background-color: #1A3A35;
-                border-radius: 15px;
-                border: 2px solid #037F68;
-                padding: 20px;
-            }
-        """)
-        
-        self.skills_layout = QVBoxLayout(self.skills_container)
-        self.skills_layout.setSpacing(15)
-        self.skills_layout.setContentsMargins(25, 25, 25, 25)
-
-        # Update skills display
-        self.update_skills_display(all_skills)
-        
-        layout.addWidget(self.skills_container)
 
     def create_professional_overview_section(self, layout):
         """Create professional overview section above job history"""
@@ -336,6 +311,53 @@ class SummaryPage(QWidget):
 
         layout.addWidget(overview_container)
 
+    def create_job_history_section(self, layout):
+        """Create job history section WITHOUT container"""
+        # Job History title
+        job_title = QLabel("Job History")
+        job_title.setFont(QFont("Arial", 28, QFont.Bold))
+        job_title.setStyleSheet("color: #00FFC6; margin: 20px 0px 15px 0px;")
+        job_title.setAlignment(Qt.AlignCenter)
+        layout.addWidget(job_title)
+
+        # Job History layout (NO CONTAINER)
+        self.job_layout = QVBoxLayout()
+        self.job_layout.setSpacing(15)
+
+        # Update job history display
+        self.update_job_history_display()
+        
+        layout.addLayout(self.job_layout)  # Add layout directly, not container
+
+    def create_education_section(self, layout):
+        """Create education section like Professional Overview"""
+        # Education title
+        edu_title = QLabel("Education")
+        edu_title.setFont(QFont("Arial", 28, QFont.Bold))
+        edu_title.setStyleSheet("color: #00FFC6; margin: 20px 0px 15px 0px;")
+        edu_title.setAlignment(Qt.AlignCenter)
+        layout.addWidget(edu_title)
+
+        # Education container
+        edu_container = QGroupBox()
+        edu_container.setStyleSheet("""
+            QGroupBox {
+                background-color: #1E4A42;
+                border-radius: 15px;
+                border: 2px solid #037F68;
+                padding: 20px;
+            }
+        """)
+        
+        self.edu_layout = QVBoxLayout(edu_container)
+        self.edu_layout.setContentsMargins(25, 25, 25, 25)
+        self.edu_layout.setSpacing(15)
+
+        # Update education display
+        self.update_education_display_new()
+        
+        layout.addWidget(edu_container)
+
     def clear_layout(self, layout):
         """Safely clear all widgets from a layout"""
         while layout.count():
@@ -370,12 +392,12 @@ class SummaryPage(QWidget):
         skills_grid_layout.setContentsMargins(0, 0, 0, 0)
         
         for i, skill in enumerate(current_skills):
-            # Truncate skill text if too long - INCREASED max_chars
-            truncated_skill = self.truncate_skill_text(skill, max_chars=25)  # Increased from 15 to 25
+            # Truncate skill text if too long
+            truncated_skill = self.truncate_skill_text(skill, max_chars=25)
             
             skill_btn = QPushButton(truncated_skill)
-            skill_btn.setFixedHeight(35)  # Single line height
-            skill_btn.setFixedWidth(180)  # INCREASED width from 120 to 180
+            skill_btn.setFixedHeight(35)
+            skill_btn.setFixedWidth(180)
             skill_btn.setStyleSheet("""
                 QPushButton {
                     background-color: #037F68;
@@ -398,15 +420,15 @@ class SummaryPage(QWidget):
         
         self.skills_layout_profile.addWidget(skills_grid_widget)
         
-        # Add pagination if needed - COMPACT SPACING
+        # Add pagination if needed
         if len(all_skills) > skills_per_page:
             nav_layout = QHBoxLayout()
-            nav_layout.setSpacing(5)  # Very tight spacing
+            nav_layout.setSpacing(5)
             nav_layout.setAlignment(Qt.AlignCenter)
             
             prev_btn = QPushButton("←")
             prev_btn.setEnabled(self.skills_page > 0)
-            prev_btn.setFixedSize(25, 25)  # Smaller buttons
+            prev_btn.setFixedSize(25, 25)
             prev_btn.clicked.connect(lambda: self.change_profile_skills_page(-1))
             prev_btn.setStyleSheet("""
                 QPushButton {
@@ -427,7 +449,7 @@ class SummaryPage(QWidget):
             
             next_btn = QPushButton("→")
             next_btn.setEnabled(end_idx < len(all_skills))
-            next_btn.setFixedSize(25, 25)  # Smaller buttons
+            next_btn.setFixedSize(25, 25)
             next_btn.clicked.connect(lambda: self.change_profile_skills_page(1))
             next_btn.setStyleSheet("""
                 QPushButton {
@@ -446,66 +468,6 @@ class SummaryPage(QWidget):
             nav_layout.addWidget(next_btn)
             
             self.skills_layout_profile.addLayout(nav_layout)
-
-    def truncate_skill_text(self, text, max_chars=25):  # Updated default to 25
-        """Truncate skill text for single line display"""
-        if len(text) <= max_chars:
-            return text
-        
-        # Simple truncation for single line
-        return text[:max_chars-3] + "..."
-
-    def change_profile_skills_page(self, direction):
-        """Change profile skills page"""
-        self.skills_page += direction
-        self.update_skills_display_for_profile()
-
-    def create_education_section(self, layout):
-        """Create education section like Professional Overview"""
-        # Education title
-        edu_title = QLabel("Education")
-        edu_title.setFont(QFont("Arial", 28, QFont.Bold))
-        edu_title.setStyleSheet("color: #00FFC6; margin: 20px 0px 15px 0px;")
-        edu_title.setAlignment(Qt.AlignCenter)
-        layout.addWidget(edu_title)
-
-        # Education container
-        edu_container = QGroupBox()
-        edu_container.setStyleSheet("""
-            QGroupBox {
-                background-color: #1E4A42;
-                border-radius: 15px;
-                border: 2px solid #037F68;
-                padding: 20px;
-            }
-        """)
-        
-        self.edu_layout = QVBoxLayout(edu_container)
-        self.edu_layout.setContentsMargins(25, 25, 25, 25)
-        self.edu_layout.setSpacing(15)
-
-        # Update education display
-        self.update_education_display_new()
-        
-        layout.addWidget(edu_container)
-
-    def create_job_history_section(self, layout):
-        """Create job history section WITHOUT container"""
-        # Job History title
-        job_title = QLabel("Job History")
-        job_title.setFont(QFont("Arial", 28, QFont.Bold))
-        job_title.setStyleSheet("color: #00FFC6; margin: 20px 0px 15px 0px;")
-        job_title.setAlignment(Qt.AlignCenter)
-        layout.addWidget(job_title)
-
-        # Job History layout (NO CONTAINER)
-        self.job_layout = QVBoxLayout()
-        self.job_layout.setSpacing(15)
-
-        # Update job history display
-        self.update_job_history_display()
-        
-        layout.addLayout(self.job_layout)  # Add layout directly, not container
 
     def update_job_history_display(self):
         """Update job history display with 2x2 grid layout"""
@@ -578,13 +540,13 @@ class SummaryPage(QWidget):
         
         self.job_layout.addLayout(grid_layout)
 
-        # Compact Navigation (symbols only, close together)
+        # Compact Navigation
         if len(experience_data) > items_per_page:
             nav_layout = QHBoxLayout()
-            nav_layout.setSpacing(8)  # Tight spacing
+            nav_layout.setSpacing(8)
             nav_layout.setAlignment(Qt.AlignCenter)
             
-            prev_btn = QPushButton("←")  # Symbol only
+            prev_btn = QPushButton("←")
             prev_btn.setEnabled(self.experience_page > 0)
             prev_btn.setFixedSize(30, 30)
             prev_btn.clicked.connect(lambda: self.change_experience_page(-1))
@@ -602,10 +564,10 @@ class SummaryPage(QWidget):
             
             total_pages = (len(experience_data) - 1) // items_per_page + 1
             page_info = QLabel(f"Page {self.experience_page + 1} of {total_pages}")
-            page_info.setStyleSheet("color: white; font-size: 14px;")  # No background
+            page_info.setStyleSheet("color: white; font-size: 14px;")
             page_info.setAlignment(Qt.AlignCenter)
             
-            next_btn = QPushButton("→")  # Symbol only
+            next_btn = QPushButton("→")
             next_btn.setEnabled(end_idx < len(experience_data))
             next_btn.setFixedSize(30, 30)
             next_btn.clicked.connect(lambda: self.change_experience_page(1))
@@ -717,47 +679,192 @@ class SummaryPage(QWidget):
             self.edu_layout.addLayout(nav_layout)
 
     def extract_skills_from_data(self):
-        """Extract skills from database - improved parsing"""
-        # First try to get from skills field
-        skills_text = self.resume_data.get('skills', '')
-        
-        # Also try to extract from content if skills field is empty
+        """Extract skills using extractor.py functions"""
         content = self.resume_data.get('extracted_text', '') or self.resume_data.get('content', '')
         
-        all_skills = []
+        if not content:
+            # Fallback ke database skills field
+            skills_text = self.resume_data.get('skills', '')
+            if skills_text and skills_text.strip():
+                skills = [skill.strip() for skill in skills_text.split(',') if skill.strip()]
+                return skills if skills else ["No skills data available"]
+            return ["No skills data available"]
         
-        if skills_text and skills_text.strip():
-            # Split by comma and clean up
-            skills = [skill.strip() for skill in skills_text.split(',') if skill.strip()]
-            all_skills.extend(skills)
-        
-        # Also try to extract expertise from Professional Summary
-        if content:
-            # Look for "Expertise spans:" pattern
-            expertise_match = re.search(r'Expertise spans:\s*([^.]+)', content, re.IGNORECASE)
-            if expertise_match:
-                expertise_text = expertise_match.group(1)
-                expertise_skills = [skill.strip() for skill in expertise_text.split(',') if skill.strip()]
-                all_skills.extend(expertise_skills)
+        # Gunakan fungsi dari extractor.py
+        try:
+            profile = extract_profile_data(content)
+            skills = profile.get('skills', [])
             
-            # Look for skills section
-            skills_section_match = re.search(r'(?i)skills[:\s]*\n+(.*?)(?=\n\s*(?:\Z|[A-Z][a-z]+\s*:))', content, re.DOTALL)
-            if skills_section_match:
-                skills_section = skills_section_match.group(1)
-                # Split by comma and clean
-                section_skills = [skill.strip() for skill in skills_section.split(',') if skill.strip() and len(skill.strip()) > 2]
-                all_skills.extend(section_skills)
+            # Filter out empty or invalid skills
+            valid_skills = [skill for skill in skills if skill and len(skill.strip()) > 1]
+            
+            # Jika tidak ada skills dari extractor, coba dari database
+            if not valid_skills:
+                skills_text = self.resume_data.get('skills', '')
+                if skills_text and skills_text.strip():
+                    valid_skills = [skill.strip() for skill in skills_text.split(',') if skill.strip() and len(skill.strip()) > 1]
+            
+            return valid_skills if valid_skills else ["No skills data available"]
+        except Exception as e:
+            print(f"Error extracting skills: {e}")
+            return ["Skills extraction error"]
+    
+    def extract_experience(self):
+        """Extract work experience using extractor.py functions"""
+        content = self.resume_data.get('extracted_text', '') or self.resume_data.get('content', '')
         
-        # Remove duplicates while preserving order
-        seen = set()
-        clean_skills = []
-        for skill in all_skills:
-            skill_lower = skill.lower()
-            if skill_lower not in seen and len(skill) > 2:
-                seen.add(skill_lower)
-                clean_skills.append(skill)
+        if not content:
+            return []
         
-        return clean_skills if clean_skills else ["No skills data available"]
+        try:
+            # Gunakan fungsi dari extractor.py
+            profile = extract_profile_data(content)
+            
+            # Convert ke format yang dibutuhkan summary_gui
+            experiences = []
+            for exp in profile.get('experience', []):
+                # Ensure all required fields exist and are properly formatted
+                title = exp.get('title', '').strip() or 'Position'
+                company = exp.get('company', '').strip() or 'Company Name'
+                start = exp.get('start', '').strip()
+                end = exp.get('end', '').strip()
+                description = exp.get('description', '').strip() or 'Detailed responsibilities available in full CV.'
+                
+                # Format period properly
+                if start and end:
+                    period = f"{start} - {end}"
+                elif start:
+                    period = f"{start} - Present"
+                elif end:
+                    period = f"Until {end}"
+                else:
+                    period = "Period not specified"
+                
+                experiences.append({
+                    'title': title,
+                    'company': company,  
+                    'period': period,
+                    'description': description
+                })
+            
+            return experiences
+        except Exception as e:
+            print(f"Error extracting experience: {e}")
+            return []
+
+    def extract_education(self):
+        """Extract education using extractor.py functions"""
+        content = self.resume_data.get('extracted_text', '') or self.resume_data.get('content', '')
+        
+        if not content:
+            return []
+        
+        try:
+            # Gunakan fungsi dari extractor.py
+            profile = extract_profile_data(content)
+            
+            # Convert ke format yang dibutuhkan summary_gui
+            education = []
+            for edu in profile.get('education', []):
+                # Ensure all fields are properly formatted
+                degree = edu.get('degree', '').strip() or 'Degree'
+                field = edu.get('field', '').strip() or 'Field of Study'
+                institution = edu.get('institution', '').strip() or 'Institution'
+                date = edu.get('date', '').strip() or 'Year not specified'
+                
+                education.append({
+                    'degree': degree,
+                    'field': field,
+                    'institution': institution,
+                    'date': date
+                })
+            
+            return education
+        except Exception as e:
+            print(f"Error extracting education: {e}")
+            return []
+    
+    def extract_overview(self):
+        """Extract overview using extractor.py functions"""
+        content = self.resume_data.get('extracted_text', '') or self.resume_data.get('content', '')
+        
+        if not content:
+            return "Professional summary will be extracted from the CV document once processed."
+        
+        try:
+            # Gunakan fungsi dari extractor.py
+            profile = extract_profile_data(content)
+            overview = profile.get('overview')
+            
+            if overview and len(overview.strip()) > 50:
+                # Clean up the overview text
+                overview = overview.strip()
+                # Remove extra whitespace
+                overview = ' '.join(overview.split())
+                return overview
+            
+            # Fallback jika overview tidak ditemukan
+            return "Experienced professional with demonstrated skills and accomplishments in their field. This candidate brings valuable expertise and a proven track record."
+        except Exception as e:
+            print(f"Error extracting overview: {e}")
+            return "Professional summary will be extracted from the CV document once processed."
+
+    def extract_gpa(self):
+        """Extract GPA using extractor.py functions"""
+        content = self.resume_data.get('extracted_text', '') or self.resume_data.get('content', '')
+        
+        if not content:
+            return None
+        
+        try:
+            profile = extract_profile_data(content)
+            gpa_list = profile.get('gpa', [])
+            
+            return gpa_list[0] if gpa_list else None
+        except Exception as e:
+            print(f"Error extracting GPA: {e}")
+            return None
+
+    def extract_certifications(self):
+        """Extract certifications using extractor.py functions"""
+        content = self.resume_data.get('extracted_text', '') or self.resume_data.get('content', '')
+        
+        if not content:
+            return []
+        
+        try:
+            profile = extract_profile_data(content)
+            return profile.get('certifications', [])
+        except Exception as e:
+            print(f"Error extracting certifications: {e}")
+            return []
+
+    def extract_achievements(self):
+        """Extract achievements using extractor.py functions"""
+        content = self.resume_data.get('extracted_text', '') or self.resume_data.get('content', '')
+        
+        if not content:
+            return []
+        
+        try:
+            profile = extract_profile_data(content)
+            return profile.get('achievements', [])
+        except Exception as e:
+            print(f"Error extracting achievements: {e}")
+            return []
+
+    def truncate_skill_text(self, text, max_chars=25):
+        """Truncate skill text for single line display"""
+        if len(text) <= max_chars:
+            return text
+        
+        # Simple truncation for single line
+        return text[:max_chars-3] + "..."
+
+    def change_profile_skills_page(self, direction):
+        """Change profile skills page"""
+        self.skills_page += direction
+        self.update_skills_display_for_profile()
     
     def change_experience_page(self, direction):
         """Change experience page"""
@@ -774,653 +881,6 @@ class SummaryPage(QWidget):
         self.clear_layout(self.edu_layout)
         # Update display
         self.update_education_display_new()
-    
-    def extract_experience(self):
-        """Extract work experience - robust parsing for multiple CV formats"""
-        content = self.resume_data.get('extracted_text', '') or self.resume_data.get('content', '')
-        
-        if not content:
-            return []
-        
-        experiences = []
-        
-        print(f"DEBUG - Content length: {len(content)}")
-        
-        # Look for experience sections with multiple possible headers
-        exp_headers = [
-            r'(?i)(?:work\s+)?experience[:\s]*',
-            r'(?i)work\s+history[:\s]*',
-            r'(?i)employment[:\s]*',
-            r'(?i)professional\s+experience[:\s]*',
-            r'(?i)career\s+history[:\s]*'
-        ]
-        
-        exp_section = ""
-        for header in exp_headers:
-            pattern = header + r'\n+(.*?)(?=\n\s*(?:education|skills|certifications|accomplishments|training)\b|$)'
-            match = re.search(pattern, content, re.DOTALL | re.IGNORECASE)
-            if match:
-                exp_section = match.group(1)
-                print(f"DEBUG - Found experience section with header: {header}")
-                break
-        
-        if not exp_section:
-            print("DEBUG - No experience section found")
-            return []
-        
-        print(f"DEBUG - Experience section preview: {exp_section[:300]}...")
-        
-        # Multiple parsing strategies
-        
-        # Strategy 1: Date range patterns (MM/YYYY to MM/YYYY, MM/YYYY to Current, etc.)
-        date_patterns = [
-            r'(\d{1,2}/\d{4})\s+to\s+(\d{1,2}/\d{4}|Current)',  # MM/YYYY to MM/YYYY
-            r'(\d{4})\s+to\s+(\d{4}|Current)',                   # YYYY to YYYY
-            r'(\w+\s+\d{4})\s+to\s+(\w+\s+\d{4}|Current)',      # Month YYYY to Month YYYY
-            r'(\d{1,2}/\d{1,2}/\d{4})\s+to\s+(\d{1,2}/\d{1,2}/\d{4}|Current)', # MM/DD/YYYY
-        ]
-        
-        for date_pattern in date_patterns:
-            matches = list(re.finditer(date_pattern, exp_section))
-            if matches:
-                print(f"DEBUG - Found {len(matches)} date matches with pattern: {date_pattern}")
-                
-                for i, match in enumerate(matches):
-                    period = match.group(0)
-                    start_pos = match.end()
-                    
-                    # Find end position
-                    end_pos = len(exp_section)
-                    if i + 1 < len(matches):
-                        end_pos = matches[i + 1].start()
-                    
-                    job_content = exp_section[start_pos:end_pos].strip()
-                    
-                    # Parse job content
-                    job_data = self.parse_job_content(job_content, period)
-                    if job_data:
-                        experiences.append(job_data)
-                
-                if experiences:
-                    break
-        
-        # Strategy 2: If no date patterns, look for job titles followed by company names
-        if not experiences:
-            print("DEBUG - Trying job title pattern matching")
-            
-            # Look for common job title patterns
-            job_title_patterns = [
-                r'([A-Z][A-Za-z\s]+(?:Manager|Director|Assistant|Coordinator|Analyst|Engineer|Teacher|Specialist|Supervisor|Lead|Officer|Consultant))\s*,?\s*(\d{1,2}/\d{4}|\d{4}|\w+\s+\d{4})',
-                r'([A-Z][A-Za-z\s]+)\s*,\s*(\d{1,2}/\d{4}|\d{4}|\w+\s+\d{4})',
-            ]
-            
-            for pattern in job_title_patterns:
-                matches = list(re.finditer(pattern, exp_section))
-                if matches:
-                    for match in matches:
-                        title = match.group(1).strip()
-                        date = match.group(2)
-                        
-                        # Look for company name in the following lines
-                        start_pos = match.end()
-                        next_content = exp_section[start_pos:start_pos+500]
-                        lines = [line.strip() for line in next_content.split('\n') if line.strip()]
-                        
-                        company = "Company Name"
-                        description = ""
-                        
-                        if lines:
-                            # First line might be company
-                            if "Company Name" in lines[0] or len(lines[0]) < 100:
-                                company = lines[0].replace("Company Name", "Company").strip()
-                                description = " ".join(lines[1:5]) if len(lines) > 1 else ""
-                            else:
-                                description = " ".join(lines[0:5])
-                        
-                        experiences.append({
-                            'title': title,
-                            'company': company,
-                            'period': date,
-                            'description': description[:300]
-                        })
-                    
-                    if experiences:
-                        break
-        
-        # Strategy 3: Parse by line structure (fallback)
-        if not experiences:
-            print("DEBUG - Trying line-by-line parsing")
-            experiences = self.parse_experience_by_lines(exp_section)
-        
-        print(f"DEBUG - Extracted {len(experiences)} experiences")
-        return experiences
-
-    def parse_job_content(self, content, period):
-        """Parse individual job content"""
-        lines = [line.strip() for line in content.split('\n') if line.strip()]
-        
-        if not lines:
-            return None
-        
-        # First line usually contains title and company
-        first_line = lines[0]
-        
-        # Clean special characters
-        first_line = re.sub(r'[ï¼​â€"]', '', first_line)
-        
-        # Extract title and company
-        title = ""
-        company = "Company Name"
-        
-        # Pattern: "Title Company Name – Location"
-        if 'Company Name' in first_line:
-            parts = first_line.split('Company Name')
-            title = parts[0].strip()
-            if len(parts) > 1:
-                company_part = parts[1].strip()
-                company = "Company Name"
-        else:
-            # Try to split by common separators
-            separators = [' at ', ' - ', ' – ', ' | ']
-            for sep in separators:
-                if sep in first_line:
-                    parts = first_line.split(sep, 1)
-                    title = parts[0].strip()
-                    company = parts[1].strip()
-                    break
-            
-            if not title:
-                title = first_line
-        
-        # Get description from remaining lines
-        description_lines = lines[1:] if len(lines) > 1 else []
-        description = " ".join(description_lines)
-        description = re.sub(r'\s+', ' ', description)
-        description = re.sub(r'[ï¼​â€"]', '', description)
-        
-        return {
-            'title': title if title else 'Position',
-            'company': company,
-            'period': period,
-            'description': description[:400] if description else 'Detailed responsibilities available in full CV.'
-        }
-
-    def parse_experience_by_lines(self, exp_section):
-        """Parse experience by analyzing line structure"""
-        lines = [line.strip() for line in exp_section.split('\n') if line.strip()]
-        experiences = []
-        
-        current_job = {}
-        
-        for i, line in enumerate(lines):
-            line = re.sub(r'[ï¼​â€"]', '', line)
-            
-            # Look for job title patterns
-            if any(keyword in line.lower() for keyword in ['manager', 'director', 'assistant', 'coordinator', 'analyst', 'engineer', 'teacher', 'specialist', 'supervisor']):
-                # Save previous job
-                if current_job and 'title' in current_job:
-                    experiences.append(current_job)
-                
-                # Start new job
-                current_job = {
-                    'title': line,
-                    'company': 'Company Name',
-                    'period': 'Period not specified',
-                    'description': ''
-                }
-            
-            # Look for company name
-            elif 'Company Name' in line and current_job:
-                current_job['company'] = line.replace('Company Name', 'Company').strip()
-            
-            # Look for dates
-            elif re.search(r'\d{1,2}/\d{4}|\d{4}', line) and current_job:
-                current_job['period'] = line
-            
-            # Add to description
-            elif current_job and 'description' in current_job:
-                if len(current_job['description']) < 300:
-                    current_job['description'] += ' ' + line
-        
-        # Add last job
-        if current_job and 'title' in current_job:
-            experiences.append(current_job)
-        
-        return experiences
-
-    def extract_education(self):
-        """Extract education - robust parsing for multiple formats"""
-        content = self.resume_data.get('extracted_text', '') or self.resume_data.get('content', '')
-        
-        if not content:
-            return []
-        
-        education = []
-        
-        # Look for education section with multiple headers
-        edu_headers = [
-            r'(?i)education[:\s]*',
-            r'(?i)education\s+and\s+training[:\s]*',
-            r'(?i)academic\s+background[:\s]*',
-            r'(?i)qualifications[:\s]*'
-        ]
-        
-        edu_section = ""
-        for header in edu_headers:
-            pattern = header + r'\n+(.*?)(?=\n\s*(?:skills|certifications|accomplishments|interests|additional)\b|$)'
-            match = re.search(pattern, content, re.DOTALL | re.IGNORECASE)
-            if match:
-                edu_section = match.group(1)
-                print(f"DEBUG - Found education section with header: {header}")
-                break
-        
-        if not edu_section:
-            print("DEBUG - No education section found")
-            return []
-        
-        print(f"DEBUG - Education section preview: {edu_section[:300]}...")
-        
-        # Parse education entries
-        lines = [line.strip() for line in edu_section.split('\n') if line.strip()]
-        
-        for line in lines:
-            line = re.sub(r'[ï¼​â€"]', '', line)
-            
-            if len(line) < 5:
-                continue
-            
-            # Multiple education patterns
-            edu_patterns = [
-                # "Bachelor of Science : Field University Year"
-                r'(Bachelor|Master|PhD|B\.?S\.?|M\.?S\.?|B\.?A\.?|M\.?A\.?)[^:]*:\s*([^0-9]+?)\s+([^0-9]+(?:University|College|Institute)[^0-9]*)\s*(\d{4})?',
-                
-                # "Degree, Year Institution"
-                r'(Bachelor|Master|PhD|B\.?S\.?|M\.?S\.?|B\.?A\.?|M\.?A\.?)[^,]*,\s*(\d{4})\s+([^,]+)',
-                
-                # "Education, Year"
-                r'([A-Za-z\s]+),\s*(\d{4})\s*$',
-                
-                # "Degree Year Institution"
-                r'(Bachelor|Master|PhD|B\.?S\.?|M\.?S\.?|B\.?A\.?|M\.?A\.?).*?\s+(\d{4})\s+([A-Za-z\s]+(?:University|College|Institute))',
-                
-                # Simple "Institution Year"
-                r'([A-Za-z\s]+(?:University|College|Institute))[^0-9]*(\d{4})'
-            ]
-            
-            for pattern in edu_patterns:
-                match = re.search(pattern, line, re.IGNORECASE)
-                if match:
-                    if len(match.groups()) == 4:  # Full pattern
-                        degree = match.group(1)
-                        field = match.group(2).strip()
-                        institution = match.group(3).strip()
-                        year = match.group(4) if match.group(4) else 'Year not specified'
-                    elif len(match.groups()) == 3:
-                        degree = match.group(1)
-                        field_or_year = match.group(2).strip()
-                        institution_or_field = match.group(3).strip()
-                        
-                        # Determine which is which
-                        if field_or_year.isdigit():
-                            year = field_or_year
-                            institution = institution_or_field
-                            field = 'Field of Study'
-                        else:
-                            year = 'Year not specified'
-                            field = field_or_year
-                            institution = institution_or_field
-                    elif len(match.groups()) == 2:
-                        degree = 'Degree'
-                        field = match.group(1).strip()
-                        institution = 'Institution'
-                        year = match.group(2)
-                    
-                    # Clean up values
-                    degree = re.sub(r'[^\w\s]', '', degree).strip()
-                    field = re.sub(r'[^\w\s]', '', field).strip()
-                    institution = re.sub(r'[^\w\s]', '', institution).strip()
-                    
-                    education.append({
-                        'degree': degree,
-                        'field': field if field else 'Field of Study',
-                        'institution': institution if institution else 'Institution',
-                        'date': year
-                    })
-                    break
-        
-        print(f"DEBUG - Extracted {len(education)} education entries")
-        return education
-
-    def extract_overview(self):
-        """Extract overview/summary - robust parsing for multiple formats"""
-        content = self.resume_data.get('extracted_text', '') or self.resume_data.get('content', '')
-        
-        if not content:
-            return "Professional summary will be extracted from the CV document once processed."
-        
-        # Look for summary sections with multiple headers
-        summary_headers = [
-            r'(?i)professional\s+summary[:\s]*',
-            r'(?i)summary[:\s]*',
-            r'(?i)profile[:\s]*',
-            r'(?i)objective[:\s]*',
-            r'(?i)overview[:\s]*',
-            r'(?i)about[:\s]*'
-        ]
-        
-        for header in summary_headers:
-            pattern = header + r'\n+(.*?)(?=\n\s*(?:experience|skills|education|core\s+qualifications|highlights)\b)'
-            match = re.search(pattern, content, re.DOTALL | re.IGNORECASE)
-            if match:
-                summary = match.group(1).strip()
-                summary = re.sub(r'\s+', ' ', summary)
-                summary = re.sub(r'[ï¼​â€"]', '', summary)
-                
-                if len(summary) > 50:
-                    return summary
-        
-        # Look for job title at the beginning
-        lines = content.split('\n')
-        for line in lines[:5]:
-            line = line.strip()
-            if len(line) > 5 and (line.isupper() or any(keyword in line.lower() for keyword in ['manager', 'director', 'coordinator', 'assistant', 'engineer', 'teacher'])):
-                return f"Position: {line}\n\nExperienced professional with demonstrated expertise in their field. Complete professional background and detailed experience are available in the full CV document."
-        
-        return "Experienced professional with demonstrated skills and accomplishments in their field. This candidate brings valuable expertise and a proven track record."
-    def update_experience_display(self):
-        """Update experience display with pagination"""
-        # Clear existing layout safely
-        self.clear_layout(self.exp_content_layout)
-
-        experience_data = self.extract_experience()
-        print(f"DEBUG - Experience data count: {len(experience_data)}")
-
-        if not experience_data:
-            # Placeholder
-            exp_placeholder = QGroupBox()
-            exp_placeholder.setMinimumHeight(200)
-            exp_placeholder.setStyleSheet("""
-                QGroupBox {
-                    background-color: #1E4A42;
-                    border-radius: 12px;
-                    border: 2px solid #037F68;
-                }
-            """)
-            placeholder_layout = QVBoxLayout(exp_placeholder)
-            placeholder_layout.setAlignment(Qt.AlignCenter)
-            
-            placeholder_text = QLabel("Work experience details\nwill be extracted from CV")
-            placeholder_text.setFont(QFont("Arial", 14))
-            placeholder_text.setStyleSheet("color: white; text-align: center;")
-            placeholder_text.setAlignment(Qt.AlignCenter)
-            placeholder_layout.addWidget(placeholder_text)
-            
-            self.exp_content_layout.addWidget(exp_placeholder)
-        else:
-            # Calculate pagination
-            start_idx = self.experience_page * self.items_per_page
-            end_idx = start_idx + self.items_per_page
-            current_experiences = experience_data[start_idx:end_idx]
-
-            # Display experience entries
-            for i, exp in enumerate(current_experiences):
-                exp_card = QGroupBox()
-                exp_card.setMinimumHeight(180)
-                exp_card.setStyleSheet("""
-                    QGroupBox {
-                        background-color: #2A5A50;
-                        border-radius: 10px;
-                        border: 2px solid #037F68;
-                        margin-bottom: 12px;
-                    }
-                """)
-                exp_layout = QVBoxLayout(exp_card)
-                exp_layout.setContentsMargins(18, 15, 18, 15)
-                exp_layout.setSpacing(8)
-                
-                # Position title
-                title = QLabel(exp.get('title', 'Position'))
-                title.setFont(QFont("Arial", 15, QFont.Bold))
-                title.setStyleSheet("color: white; font-weight: bold;")
-                title.setWordWrap(True)
-
-                # Company and period
-                company_period = f"{exp.get('company', 'Company')} • {exp.get('period', 'Period not specified')}"
-                company_period_label = QLabel(company_period)
-                company_period_label.setFont(QFont("Arial", 12, QFont.Medium))
-                company_period_label.setStyleSheet("color: #00FFC6; font-weight: bold; margin-bottom: 5px;")
-                
-                # Description
-                desc_text = exp.get('description', '')
-                if len(desc_text) > 300:
-                    desc_text = desc_text[:300] + "..."
-                elif not desc_text:
-                    desc_text = 'Detailed responsibilities and achievements available in full CV.'
-                
-                desc = QLabel(desc_text)
-                desc.setStyleSheet("font-size: 12px; color: white; line-height: 18px;")
-                desc.setWordWrap(True)
-
-                exp_layout.addWidget(title)
-                exp_layout.addWidget(company_period_label)
-                exp_layout.addWidget(desc)
-                
-                self.exp_content_layout.addWidget(exp_card)
-
-            # Navigation for experience
-            if len(experience_data) > self.items_per_page:
-                nav_layout = QHBoxLayout()
-                
-                prev_btn = QPushButton("← Prev")
-                prev_btn.setEnabled(self.experience_page > 0)
-                prev_btn.setFixedSize(80, 30)
-                prev_btn.setStyleSheet("""
-                    QPushButton {
-                        background-color: #037F68;
-                        color: white;
-                        border-radius: 6px;
-                        font-size: 11px;
-                        font-weight: bold;
-                    }
-                    QPushButton:hover { background-color: #2BBA91; }
-                    QPushButton:disabled { background-color: #555555; color: #888888; }
-                """)
-                prev_btn.clicked.connect(lambda: self.change_experience_page(-1))
-                
-                total_pages = (len(experience_data) - 1) // self.items_per_page + 1
-                page_info = QLabel(f"{self.experience_page + 1}/{total_pages}")
-                page_info.setStyleSheet("color: #00FFC6; font-size: 11px;")
-                page_info.setAlignment(Qt.AlignCenter)
-                
-                next_btn = QPushButton("Next →")
-                next_btn.setEnabled(end_idx < len(experience_data))
-                next_btn.setFixedSize(80, 30)
-                next_btn.setStyleSheet("""
-                    QPushButton {
-                        background-color: #037F68;
-                        color: white;
-                        border-radius: 6px;
-                        font-size: 11px;
-                        font-weight: bold;
-                    }
-                    QPushButton:hover { background-color: #2BBA91; }
-                    QPushButton:disabled { background-color: #555555; color: #888888; }
-                """)
-                next_btn.clicked.connect(lambda: self.change_experience_page(1))
-                
-                nav_layout.addWidget(prev_btn)
-                nav_layout.addStretch()
-                nav_layout.addWidget(page_info)
-                nav_layout.addStretch()
-                nav_layout.addWidget(next_btn)
-                
-                self.exp_content_layout.addLayout(nav_layout)
-
-    def update_education_display(self):
-        """Update education display with better formatting"""
-        # Clear existing layout safely
-        self.clear_layout(self.edu_content_layout)
-
-        education_data = self.extract_education()
-        print(f"DEBUG - Education data count: {len(education_data)}")
-
-        if not education_data:
-            # Placeholder
-            edu_placeholder = QGroupBox()
-            edu_placeholder.setMinimumHeight(200)
-            edu_placeholder.setStyleSheet("""
-                QGroupBox {
-                    background-color: #1E4A42;
-                    border-radius: 12px;
-                    border: 2px solid #037F68;
-                }
-            """)
-            placeholder_layout = QVBoxLayout(edu_placeholder)
-            placeholder_layout.setAlignment(Qt.AlignCenter)
-            
-            placeholder_text = QLabel("Education details\nwill be extracted from CV")
-            placeholder_text.setFont(QFont("Arial", 14))
-            placeholder_text.setStyleSheet("color: white; text-align: center;")
-            placeholder_text.setAlignment(Qt.AlignCenter)
-            placeholder_layout.addWidget(placeholder_text)
-            
-            self.edu_content_layout.addWidget(edu_placeholder)
-        else:
-            # Calculate pagination
-            start_idx = self.education_page * self.items_per_page
-            end_idx = start_idx + self.items_per_page
-            current_education = education_data[start_idx:end_idx]
-
-            # Display education entries
-            for i, edu in enumerate(current_education):
-                edu_card = QGroupBox()
-                edu_card.setMinimumHeight(120)
-                edu_card.setStyleSheet("""
-                    QGroupBox {
-                        background-color: #1E4A42;
-                        border-radius: 10px;
-                        border: 2px solid #037F68;
-                        margin-bottom: 12px;
-                    }
-                """)
-                edu_layout = QVBoxLayout(edu_card)
-                edu_layout.setContentsMargins(18, 15, 18, 15)
-                edu_layout.setSpacing(8)
-                
-                # Degree with field
-                degree_text = edu.get('degree', 'Degree')
-                if edu.get('field', '') and edu.get('field', '').strip():
-                    degree_text += f" in {edu.get('field', '')}"
-                
-                degree_label = QLabel(degree_text)
-                degree_label.setFont(QFont("Arial", 14, QFont.Bold))
-                degree_label.setStyleSheet("color: white; font-weight: bold;")
-                degree_label.setWordWrap(True)
-                
-                # Institution and Year
-                institution_text = edu.get('institution', 'Institution')
-                if edu.get('date', '') and edu.get('date', '') != 'Year not specified':
-                    institution_text += f" • {edu.get('date', '')}"
-                
-                info_label = QLabel(institution_text)
-                info_label.setFont(QFont("Arial", 12))
-                info_label.setStyleSheet("color: #00FFC6; font-weight: 500;")
-                info_label.setWordWrap(True)
-                
-                edu_layout.addWidget(degree_label)
-                edu_layout.addWidget(info_label)
-                
-                self.edu_content_layout.addWidget(edu_card)
-
-            # Navigation for education
-            if len(education_data) > self.items_per_page:
-                nav_layout = QHBoxLayout()
-                
-                prev_btn = QPushButton("← Prev")
-                prev_btn.setEnabled(self.education_page > 0)
-                prev_btn.setFixedSize(80, 30)
-                prev_btn.setStyleSheet("""
-                    QPushButton {
-                        background-color: #037F68;
-                        color: white;
-                        border-radius: 6px;
-                        font-size: 11px;
-                        font-weight: bold;
-                    }
-                    QPushButton:hover { background-color: #2BBA91; }
-                    QPushButton:disabled { background-color: #555555; color: #888888; }
-                """)
-                prev_btn.clicked.connect(lambda: self.change_education_page(-1))
-                
-                total_pages = (len(education_data) - 1) // self.items_per_page + 1
-                page_info = QLabel(f"{self.education_page + 1}/{total_pages}")
-                page_info.setStyleSheet("color: #00FFC6; font-size: 11px;")
-                page_info.setAlignment(Qt.AlignCenter)
-                
-                next_btn = QPushButton("Next →")
-                next_btn.setEnabled(end_idx < len(education_data))
-                next_btn.setFixedSize(80, 30)
-                next_btn.setStyleSheet("""
-                    QPushButton {
-                        background-color: #037F68;
-                        color: white;
-                        border-radius: 6px;
-                        font-size: 11px;
-                        font-weight: bold;
-                    }
-                    QPushButton:hover { background-color: #2BBA91; }
-                    QPushButton:disabled { background-color: #555555; color: #888888; }
-                """)
-                next_btn.clicked.connect(lambda: self.change_education_page(1))
-                
-                nav_layout.addWidget(prev_btn)
-                nav_layout.addStretch()
-                nav_layout.addWidget(page_info)
-                nav_layout.addStretch()
-                nav_layout.addWidget(next_btn)
-                
-                self.edu_content_layout.addLayout(nav_layout)
-
-    def extract_overview(self):
-        """Extract overview/summary - improved for debugging"""
-        content = self.resume_data.get('extracted_text', '') or self.resume_data.get('content', '')
-        
-        if not content:
-            return "Professional summary will be extracted from the CV document once processed."
-        
-        print(f"DEBUG - Overview content length: {len(content)}")
-        print(f"DEBUG - Overview content preview: {content[:300]}...")
-        
-        # Look for Professional Summary section
-        summary_patterns = [
-            r'(?i)professional\s+summary[:\s]*\n+(.*?)(?=\n\s*(?:experience|accomplishments|education|skills)\b)',
-            r'(?i)summary[:\s]*\n+(.*?)(?=\n\s*(?:experience|accomplishments|education|skills)\b)',
-            r'(?i)profile[:\s]*\n+(.*?)(?=\n\s*(?:experience|accomplishments|education|skills)\b)',
-            r'(?i)objective[:\s]*\n+(.*?)(?=\n\s*(?:experience|accomplishments|education|skills)\b)'
-        ]
-        
-        for pattern in summary_patterns:
-            match = re.search(pattern, content, re.DOTALL)
-            if match:
-                summary = match.group(1).strip()
-                # Clean up the text
-                summary = re.sub(r'\s+', ' ', summary)
-                summary = re.sub(r'[^\w\s.,;:()/-]', '', summary)  # Remove weird characters
-                print(f"DEBUG - Found summary with pattern: {pattern}")
-                print(f"DEBUG - Summary length: {len(summary)}")
-                if len(summary) > 50:
-                    return summary
-        
-        # Look for job title at the beginning
-        lines = content.split('\n')
-        for line in lines[:5]:  # Check first 5 lines
-            line = line.strip()
-            if len(line) > 5 and line.isupper():  # Job titles are often in CAPS
-                print(f"DEBUG - Found job title: {line}")
-                return f"Position: {line}\n\nExperienced professional with demonstrated expertise in their field. Complete professional background and detailed experience are available in the full CV document."
-        
-        return "Experienced professional with demonstrated skills and accomplishments in their field. This candidate brings valuable expertise and a proven track record."
-    
 
     def go_back(self):
         """Go back to previous window"""
