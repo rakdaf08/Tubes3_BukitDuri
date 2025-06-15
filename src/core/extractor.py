@@ -157,48 +157,47 @@ def extract_profile_data(text: str) -> dict:
                             experiences = [exp_entry]
                 
                 profile["experience"] = experiences
-                break
-
-        # IMPROVED EDUCATION EXTRACTION
+                break        # SIMPLIFIED EDUCATION EXTRACTION - RAW TEXT ONLY
         edu_patterns = [
-            r"(?i)(?:Education|Educational\s+Background|Academic\s+Background)\s*:?\s*\n(.*?)(?=\n\s*(?:Experience|Work|Skills|Certifications|References|Training|EXPERIENCE|WORK|SKILLS)|\Z)",
+            # Main education section pattern - capture everything until next major section
+            r"(?i)(?:Education|Educational\s+Background|Academic\s+Background|Academic\s+Qualifications|EDUCATION)\s*:?\s*,?\s*\n(.*?)(?=\n\s*(?:Experience|Work\s+History|Professional\s+Experience|Employment|Skills|Technical\s+Skills|Core\s+Skills|Certifications|References|Training|Summary|Overview|Professional\s+Summary|Accomplishments|Awards|Highlights|EXPERIENCE|WORK|SKILLS|CERTIFICATIONS|REFERENCES|TRAINING|SUMMARY|OVERVIEW|HIGHLIGHTS)|\Z)",
         ]
         
         for pattern in edu_patterns:
             match = re.search(pattern, text, re.DOTALL)
             if match:
-                edu_section = match.group(1).strip()                
-                education_entries = []
+                edu_section = match.group(1).strip()
                 
-                # Split by degree keywords
-                degree_keywords = ['Master of Science', 'Master of Arts', 'Bachelor of Science', 'Bachelor of Arts', 
-                                 'Master', 'Bachelor', 'PhD', 'Doctorate', 'Associate', 'Diploma']
+                # Clean up the text but keep structure
+                lines = [line.strip() for line in edu_section.split('\n') if line.strip()]
                 
-                degree_positions = []
-                for keyword in degree_keywords:
-                    for match in re.finditer(rf'\b{re.escape(keyword)}\b', edu_section, re.IGNORECASE):
-                        degree_positions.append((match.start(), keyword, match.group()))
+                # Filter out lines that are clearly not education related and remove excessive empty lines
+                filtered_lines = []
+                empty_line_count = 0
                 
-                degree_positions.sort(key=lambda x: x[0])
-                
-                if len(degree_positions) >= 1:                    
-                    for i in range(len(degree_positions)):
-                        start_pos = degree_positions[i][0]
-                        end_pos = degree_positions[i+1][0] if i+1 < len(degree_positions) else len(edu_section)
-                        
-                        degree_text = edu_section[start_pos:end_pos].strip()
-                        
-                        if len(degree_text) > 10:
-                            edu_entry = parse_single_education_improved(degree_text)
-                            if edu_entry:
-                                education_entries.append(edu_entry)
+                for line in lines:
+                    # Skip lines that are clearly section headers for other sections
+                    if re.match(r'(?i)^(Experience|Work|Skills|Employment|Training|Certifications|References|Summary|Overview|Highlights)', line):
+                        break  # Stop processing when we hit another section
                     
-                    profile["education"] = education_entries
-                else:
-                    # Single education entry
-                    edu_entry = parse_single_education_improved(edu_section)
-                    if edu_entry:
-                        profile["education"] = [edu_entry]
+                    if line.strip() == "":
+                        empty_line_count += 1
+                        if empty_line_count >= 5:  # Stop if more than 5 consecutive empty lines
+                            break
+                    else:
+                        empty_line_count = 0
+                        filtered_lines.append(line)
+                
+                # Create one education entry with raw text
+                if filtered_lines and len('\n'.join(filtered_lines)) > 20:
+                    education_raw_text = '\n'.join(filtered_lines)
+                    profile["education"] = [{
+                        "raw_text": education_raw_text,
+                        "degree": "Education Background",
+                        "institution": "Multiple Institutions",
+                        "date": "Multiple Years",
+                        "field": ""
+                    }]
                 break
 
     except Exception as e:

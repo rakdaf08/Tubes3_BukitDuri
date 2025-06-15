@@ -637,7 +637,7 @@ class SummaryPage(QWidget):
             self.job_layout.addLayout(nav_layout)
 
     def update_education_display_separated(self):
-        """MODIFIED - Update education display dengan setiap education terpisah"""
+        """MODIFIED - Display education as raw text block only"""
         education_data = self.extract_education()
         
         if not education_data:
@@ -648,101 +648,41 @@ class SummaryPage(QWidget):
             self.edu_layout.addWidget(placeholder_text)
             return
 
-        # Calculate pagination
-        start_idx = self.education_page * self.items_per_page
-        end_idx = start_idx + self.items_per_page
-        current_education = education_data[start_idx:end_idx]
-
-        # Display education entries - SETIAP EDUCATION DALAM CARD TERPISAH
-        for edu in current_education:
-            # Create individual education card
-            edu_card = QGroupBox()
-            edu_card.setStyleSheet("""
-                QGroupBox {
-                    background-color: #2A5A50;
-                    border-radius: 10px;
-                    border: 1px solid #037F68;
-                    padding: 15px;
-                    margin: 8px 0px;
-                }
-            """)
+        # Display education as one big raw text block
+        for edu in education_data:
+            # Get raw text from education entry
+            raw_text = edu.get('raw_text', '')
             
-            edu_card_layout = QVBoxLayout(edu_card)
-            edu_card_layout.setContentsMargins(15, 12, 15, 12)
-            edu_card_layout.setSpacing(6)
+            if raw_text:
+                # Create education text display widget
+                text_widget = QTextEdit()
+                text_widget.setPlainText(raw_text)
+                text_widget.setReadOnly(True)
+                text_widget.setFont(QFont("Arial", 14))
+                text_widget.setStyleSheet("""
+                    QTextEdit {
+                        background-color: transparent;
+                        border: none;
+                        color: white;
+                        selection-background-color: #037F68;
+                        padding: 15px;
+                    }
+                """)
+                
+                # Calculate height based on content (approximately 20px per line)
+                line_count = raw_text.count('\n') + 1
+                estimated_height = max(100, min(400, line_count * 20 + 40))
+                text_widget.setFixedHeight(estimated_height)
+                
+                self.edu_layout.addWidget(text_widget)
+            else:
+                # Fallback if no raw text
+                no_text_label = QLabel("Education information not available")
+                no_text_label.setFont(QFont("Arial", 14))
+                no_text_label.setStyleSheet("color: #E0E0E0; background: transparent; font-style: italic;")
+                self.edu_layout.addWidget(no_text_label)
             
-            # Degree with field 
-            degree_text = edu.get('degree', 'Degree')
-            if edu.get('field', '') and edu.get('field', '').strip() and edu.get('field', '') != 'Field of Study':
-                degree_text += f" in {edu.get('field', '')}"
-            
-            degree_label = QLabel(degree_text)
-            degree_label.setFont(QFont("Arial", 18, QFont.Bold))
-            degree_label.setStyleSheet("color: #00FFC6; background: transparent; margin-bottom: 5px;")
-            degree_label.setWordWrap(True)
-            
-            # Institution and Year 
-            institution_text = edu.get('institution', 'Institution')
-            if edu.get('date', '') and edu.get('date', '') != 'Year not specified':
-                institution_text += f" • {edu.get('date', '')}"
-            
-            info_label = QLabel(institution_text)
-            info_label.setFont(QFont("Arial", 14))
-            info_label.setStyleSheet("color: white; background: transparent; margin-bottom: 8px;")
-            info_label.setWordWrap(True)
-            
-            edu_card_layout.addWidget(degree_label)
-            edu_card_layout.addWidget(info_label)
-            
-            # Add individual education card to main layout
-            self.edu_layout.addWidget(edu_card)
-
-        # Navigation
-        if len(education_data) > self.items_per_page:
-            nav_layout = QHBoxLayout()
-            
-            prev_btn = QPushButton("← Previous")
-            prev_btn.setEnabled(self.education_page > 0)
-            prev_btn.clicked.connect(lambda: self.change_education_page(-1))
-            prev_btn.setStyleSheet("""
-                QPushButton {
-                    background-color: #037F68;
-                    color: white;
-                    border-radius: 8px;
-                    padding: 8px 16px;
-                    font-weight: bold;
-                }
-                QPushButton:hover { background-color: #2BBA91; }
-                QPushButton:disabled { background-color: #555555; }
-            """)
-            
-            total_pages = (len(education_data) - 1) // self.items_per_page + 1
-            page_info = QLabel(f"Page {self.education_page + 1} of {total_pages}")
-            page_info.setStyleSheet("color: #00FFC6; font-size: 14px;")
-            page_info.setAlignment(Qt.AlignCenter)
-            
-            next_btn = QPushButton("Next →")
-            next_btn.setEnabled(end_idx < len(education_data))
-            next_btn.clicked.connect(lambda: self.change_education_page(1))
-            next_btn.setStyleSheet("""
-                QPushButton {
-                    background-color: #037F68;
-                    color: white;
-                    border-radius: 8px;
-                    padding: 8px 16px;
-                    font-weight: bold;
-                }
-                QPushButton:hover { background-color: #2BBA91; }
-                QPushButton:disabled { background-color: #555555; }
-            """)
-            
-            nav_layout.addWidget(prev_btn)
-            nav_layout.addStretch()
-            nav_layout.addWidget(page_info)
-            nav_layout.addStretch()
-            nav_layout.addWidget(next_btn)
-            
-            self.edu_layout.addLayout(nav_layout)
+            break  # Only show one education block
 
     def extract_skills_from_data(self):
         """Extract skills using cached profile data"""
@@ -783,26 +723,15 @@ class SummaryPage(QWidget):
             return []
 
     def extract_education(self):
-        """Extract education using cached profile data - FIXED untuk mendapatkan semua data"""
+        """Extract education using cached profile data - Return raw text"""
         try:
             profile = self.get_cached_profile()
             education = profile.get('education', [])
             
             print(f"DEBUG - Using cached education: {len(education)} found")
             
-            # Convert to expected format
-            formatted_education = []
-            for edu in education:
-                if isinstance(edu, dict):
-                    formatted_edu = {
-                        'degree': edu.get('degree', 'Degree'),
-                        'field': edu.get('field', ''),
-                        'institution': edu.get('institution', 'Institution'),
-                        'date': edu.get('date', 'Year not specified')
-                    }
-                    formatted_education.append(formatted_edu)
-            
-            return formatted_education
+            # Return the education data as-is (should contain raw_text)
+            return education
             
         except Exception as e:
             print(f"DEBUG - Error extracting education: {e}")
