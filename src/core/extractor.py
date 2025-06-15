@@ -159,48 +159,31 @@ def extract_profile_data(text: str) -> dict:
                 profile["experience"] = experiences
                 break
 
-        # IMPROVED EDUCATION EXTRACTION
+        # SIGNIFICANTLY IMPROVED EDUCATION EXTRACTION
         edu_patterns = [
-            r"(?i)(?:Education|Educational\s+Background|Academic\s+Background)\s*:?\s*\n(.*?)(?=\n\s*(?:Experience|Work|Skills|Certifications|References|Training|EXPERIENCE|WORK|SKILLS)|\Z)",
+            r"(?i)(?:Education|Educational\s+Background|Academic\s+Background|Education\s+and\s+Training)\s*:?\s*\n(.*?)(?=\n\s*(?:Experience|Work|Skills|Certifications|References|Training|Professional|Additional\s+Information|EXPERIENCE|WORK|SKILLS)|\Z)",
+            # Alternative pattern for education at the end
+            r"(?i)Education\s*:?\s*\n?(.*?)(?=\n\s*(?:Skills|Professional\s+Affiliations|Additional\s+Information|References|Interests|Activities|Certifications)|\Z)",
         ]
         
         for pattern in edu_patterns:
             match = re.search(pattern, text, re.DOTALL)
             if match:
-                edu_section = match.group(1).strip()                
+                edu_section = match.group(1).strip()
                 education_entries = []
                 
-                # Split by degree keywords
-                degree_keywords = ['Master of Science', 'Master of Arts', 'Bachelor of Science', 'Bachelor of Arts', 
-                                 'Master', 'Bachelor', 'PhD', 'Doctorate', 'Associate', 'Diploma']
+                # IMPROVED: Multiple splitting strategies
+                entries = split_education_entries(edu_section)
                 
-                degree_positions = []
-                for keyword in degree_keywords:
-                    for match in re.finditer(rf'\b{re.escape(keyword)}\b', edu_section, re.IGNORECASE):
-                        degree_positions.append((match.start(), keyword, match.group()))
+                for entry_text in entries:
+                    if len(entry_text.strip()) > 15:  # Minimum viable education entry
+                        edu_entry = parse_single_education_improved(entry_text)
+                        if edu_entry and edu_entry['degree'] != "Degree":  # Valid entry
+                            education_entries.append(edu_entry)
                 
-                degree_positions.sort(key=lambda x: x[0])
-                
-                if len(degree_positions) >= 1:                    
-                    for i in range(len(degree_positions)):
-                        start_pos = degree_positions[i][0]
-                        end_pos = degree_positions[i+1][0] if i+1 < len(degree_positions) else len(edu_section)
-                        
-                        degree_text = edu_section[start_pos:end_pos].strip()
-                        
-                        if len(degree_text) > 10:
-                            edu_entry = parse_single_education_improved(degree_text)
-                            if edu_entry:
-                                education_entries.append(edu_entry)
-                    
+                if education_entries:
                     profile["education"] = education_entries
-                else:
-                    # Single education entry
-                    edu_entry = parse_single_education_improved(edu_section)
-                    if edu_entry:
-                        profile["education"] = [edu_entry]
-                break
-
+                    break
     except Exception as e:
         print(f"DEBUG - Error in extract_profile_data: {e}")
 
@@ -210,6 +193,111 @@ def extract_profile_data(text: str) -> dict:
     profile["achievements"] = list(dict.fromkeys(profile["achievements"]))[:5]
     
     return profile
+
+def split_education_entries(edu_section):
+    """Split education section into individual entries using multiple strategies"""
+    entries = []
+    
+    # Strategy 1: Split by year patterns (most reliable)
+    year_pattern = r'\b(19|20)\d{2}\b'
+    year_positions = []
+    
+    for match in re.finditer(year_pattern, edu_section):
+        year_positions.append(match.start())
+    
+    if len(year_positions) > 1:
+        # Split by years
+        for i in range(len(year_positions)):
+            if i == 0:
+                start = 0
+            else:
+                start = year_positions[i-1]
+            
+            if i == len(year_positions) - 1:
+                end = len(edu_section)
+            else:
+                end = year_positions[i+1]
+            
+            entry = edu_section[start:end].strip()
+            if len(entry) > 15:
+                entries.append(entry)
+        return entries
+    
+    # Strategy 2: Split by degree keywords
+    degree_keywords = [
+        'Master of Science', 'Master of Arts', 'Master of Education', 'Master of Fine Arts',
+        'Bachelor of Science', 'Bachelor of Arts', 'Bachelor of Fine Arts', 
+        'Associate of Science', 'Associate of Arts', 'Associate of Applied Science',
+        'Masters', 'Bachelor', 'Associates', 'Doctorate', 'PhD', 'MBA', 'MS', 'MA', 'BS', 'BA',
+        'Certificate', 'Diploma', 'A.A.', 'B.S.', 'M.S.', 'B.A.', 'M.A.'
+    ]
+    
+    degree_positions = []
+    for keyword in degree_keywords:
+        for match in re.finditer(rf'\b{re.escape(keyword)}\b', edu_section, re.IGNORECASE):
+            degree_positions.append((match.start(), keyword))
+    
+    degree_positions.sort(key=lambda x: x[0])
+    
+    if len(degree_positions) > 1:
+        for i in range(len(degree_positions)):
+            start_pos = degree_positions[i][0]
+            end_pos = degree_positions[i+1][0] if i+1 < len(degree_positions) else len(edu_section)
+            
+            entry = edu_section[start_pos:end_pos].strip()
+            if len(entry) > 15:
+                entries.append(entry)
+        return entries
+    
+    # Strategy 3: Split by institution keywords
+    institution_keywords = ['University', 'College', 'Institute', 'School']
+    
+    institution_positions = []
+    for keyword in institution_keywords:
+        for match in re.finditer(rf'\b{re.escape(keyword)}\b', edu_section, re.IGNORECASE):
+            institution_positions.append(match.start())
+    
+    institution_positions.sort()
+    
+    if len(institution_positions) > 1:
+        for i in range(len(institution_positions)):
+            if i == 0:
+                start = 0
+            else:
+                start = institution_positions[i-1]
+            
+            if i == len(institution_positions) - 1:
+                end = len(edu_section)
+            else:
+                end = institution_positions[i+1]
+            
+            entry = edu_section[start:end].strip()
+            if len(entry) > 15:
+                entries.append(entry)
+        return entries
+    
+    # Strategy 4: Split by line breaks (fallback)
+    lines = [line.strip() for line in edu_section.split('\n') if line.strip()]
+    
+    current_entry = []
+    for line in lines:
+        if any(keyword.lower() in line.lower() for keyword in degree_keywords[:10]):
+            if current_entry:
+                entries.append('\n'.join(current_entry))
+                current_entry = [line]
+            else:
+                current_entry = [line]
+        else:
+            current_entry.append(line)
+    
+    if current_entry:
+        entries.append('\n'.join(current_entry))
+    
+    # If all strategies fail, return the whole section as one entry
+    if not entries:
+        entries = [edu_section]
+    
+    return entries
 
 def parse_single_experience_improved(job_text):
     """IMPROVED: Parse a single job experience entry with better date extraction"""
@@ -339,76 +427,172 @@ def parse_single_experience_improved(job_text):
         return None
 
 def parse_single_education_improved(edu_text):
-    """IMPROVED: Parse a single education entry based on HR examples"""
+    """SIGNIFICANTLY IMPROVED: Parse a single education entry with comprehensive patterns"""
     try:
-        lines = [line.strip() for line in edu_text.split('\n') if line.strip()]
+        # Clean the text
+        edu_text = re.sub(r'\s+', ' ', edu_text).strip()
         
-        # Extract degree with improved patterns
+        # Extract degree with MUCH more comprehensive patterns
         degree_patterns = [
-            r'(Master\s+of\s+(?:Science|Arts|Business\s+Administration|Education))',
-            r'(Bachelor\s+of\s+(?:Science|Arts|Commerce))',
-            r'(Master|Bachelor|PhD|Doctorate|Associate)',
-            r'(MBA|MS|MA|BS|BA|PhD)'
+            # Full degree names
+            r'(Master\s+of\s+(?:Science|Arts|Business\s+Administration|Education|Fine\s+Arts|Engineering|Public\s+Administration))',
+            r'(Bachelor\s+of\s+(?:Science|Arts|Fine\s+Arts|Commerce|Engineering|Applied\s+Science))',
+            r'(Associate\s+of\s+(?:Science|Arts|Applied\s+Science))',
+            r'(Doctor\s+of\s+(?:Philosophy|Medicine|Education))',
+            
+            # Abbreviated forms with colon
+            r'(Master\s+of\s+[A-Za-z\s]+)\s*:',
+            r'(Bachelor\s+of\s+[A-Za-z\s]+)\s*:',
+            r'(Associate\s+of\s+[A-Za-z\s]+)\s*:',
+            
+            # Common abbreviations
+            r'\b(MBA|MS|MA|BS|BA|PhD|EdD|JD|MD|DDS|PharmD)\b',
+            r'\b(M\.S\.|M\.A\.|B\.S\.|B\.A\.|Ph\.D\.)\b',
+            r'\b(A\.A\.|A\.S\.|A\.A\.S\.)\b',
+            
+            # Degree with field pattern
+            r'(Masters?)\s*:?\s*[A-Za-z\s]+',
+            r'(Bachelors?)\s*:?\s*[A-Za-z\s]+',
+            r'(Associates?)\s*:?\s*[A-Za-z\s]+',
+            r'(Doctorate|PhD)\s*:?\s*[A-Za-z\s]+',
+            
+            # Certificate and Diploma
+            r'(Certificate)\s+in\s+[A-Za-z\s]+',
+            r'(Diploma)\s*:?\s*[A-Za-z\s]+',
+            r'(Trade\s+Certificate)\s*:?\s*[A-Za-z\s]+',
+            
+            # Alternative formats
+            r'(Master|Bachelor|Associate|Doctorate)\s+[A-Za-z\s]*',
         ]
         
         degree = "Degree"
+        field = ""
+        
         for pattern in degree_patterns:
             degree_match = re.search(pattern, edu_text, re.IGNORECASE)
             if degree_match:
-                degree = degree_match.group(1)
+                degree = degree_match.group(1).strip()
+                
+                # Try to extract field from the same match
+                remaining_text = edu_text[degree_match.end():degree_match.end()+100]
+                field_match = re.search(r'[:]\s*([A-Za-z\s&/-]+)', remaining_text)
+                if field_match:
+                    field = field_match.group(1).strip()
+                
                 break
         
-        # Extract field of study - improved patterns
-        field = ""
-        field_patterns = [
-            r'(?:in\s+|:\s*)([A-Za-z\s]+(?:Science|Arts|Management|Engineering|Studies|Administration))',
-            r'(?:Major|Field|Study):\s*([A-Za-z\s]+)',
-            r'(?:Bachelor|Master|PhD)\s+(?:of\s+)?(?:Science|Arts)\s*:\s*([A-Za-z\s]+)',
-        ]
+        # Extract field of study with comprehensive patterns if not found above
+        if not field:
+            field_patterns = [
+                # Colon patterns
+                r'(?:in\s+|:\s*)([A-Za-z\s&/-]+(?:Science|Arts|Management|Engineering|Studies|Administration|Technology|Design|Education|Business))',
+                r'(?:Major|Field|Study|Emphasis)\s*:\s*([A-Za-z\s&/-]+)',
+                r'(?:Bachelor|Master|PhD|Associate)\s+(?:of\s+)?(?:Science|Arts)\s*:\s*([A-Za-z\s&/-]+)',
+                
+                # "in" patterns
+                r'(?:Bachelor|Master|Associate|Degree)\s+in\s+([A-Za-z\s&/-]+)',
+                r'(?:Major|Concentration|Focus)\s+in\s+([A-Za-z\s&/-]+)',
+                
+                # Direct subject patterns
+                r'(?:Criminal\s+Justice|Computer\s+Science|Business\s+Administration|Interior\s+Design|Art\s+Education|Elementary\s+Education|Information\s+Technology)',
+                r'(?:Nursing|Accounting|Marketing|Finance|Psychology|Mathematics|Chemistry|Biology|Physics|History|English)',
+                
+                # From sample data patterns
+                r'([A-Za-z\s]+(?:Education|Technology|Management|Administration|Science|Arts|Studies|Design))',
+            ]
+            
+            for pattern in field_patterns:
+                field_match = re.search(pattern, edu_text, re.IGNORECASE)
+                if field_match:
+                    field = field_match.group(1).strip()[:50]
+                    # Clean common noise words
+                    field = re.sub(r'^(in|of|the|a|an)\s+', '', field, flags=re.IGNORECASE)
+                    break
         
-        for pattern in field_patterns:
-            field_match = re.search(pattern, edu_text, re.IGNORECASE)
-            if field_match:
-                field = field_match.group(1).strip()[:50]
-                break
-        
-        # Extract institution - improved patterns
-        institution = "Institution"
+        # Extract institution with comprehensive patterns
         institution_patterns = [
-            r'([A-Z][a-zA-Z\s]+(?:University|College|Institute|School))',
+            # Full university names
+            r'([A-Z][a-zA-Z\s]+(?:University|College|Institute|School)(?:\s+of\s+[A-Za-z\s]+)?)',
             r'(University\s+of\s+[A-Za-z\s]+)',
             r'([A-Z][a-zA-Z\s]+\s+State\s+University)',
+            r'([A-Z][a-zA-Z\s]+\s+Community\s+College)',
+            r'([A-Z][a-zA-Z\s]+\s+Technical\s+(?:College|Institute))',
+            
+            # City, State pattern
+            r'([A-Z][a-zA-Z\s]+(?:University|College))\s*[–-]\s*City\s*,\s*State',
+            r'([A-Z][a-zA-Z\s]+(?:University|College))\s*ï¼​\s*City\s*,\s*State',
+            
+            # Special patterns from sample data
+            r'(Art\s+Institute\s+of\s+[A-Za-z\s]+)',
+            r'(Miami\s+International\s+University\s+of\s+Art\s+and\s+Design)',
+            r'([A-Z][a-zA-Z\s]+\s+International\s+University)',
         ]
         
+        institution = "Institution"
         for pattern in institution_patterns:
             inst_match = re.search(pattern, edu_text)
             if inst_match:
-                institution = inst_match.group(1)[:70]
+                institution = inst_match.group(1).strip()[:70]
+                # Clean up common replacements
+                institution = re.sub(r'\s*[–-]\s*City\s*,\s*State.*', '', institution)
+                institution = re.sub(r'\s*ï¼​.*', '', institution)
                 break
         
-        # Extract year - multiple patterns
-        year_patterns = [
-            r'\b(19|20)\d{2}\b',
-            r'(?:Graduated|Completed|Finished):\s*(\d{4})',
+        # Extract graduation year/date with multiple patterns
+        date_patterns = [
+            # Year patterns
+            r'\b((?:19|20)\d{2})\b',
+            r'(?:Graduated|Completed|Finished|Expected)(?:\s+in)?\s*:?\s*((?:19|20)\d{2})',
+            r'(?:December|May|June|August|January|March|April|July|September|October|November)\s+((?:19|20)\d{2})',
+            
+            # Month Year patterns
+            r'((?:December|May|June|August|January|March|April|July|September|October|November)\s+(?:19|20)\d{2})',
+            
+            # Expected graduation
+            r'(?:Expected|Graduating)(?:\s+in)?\s*:?\s*((?:19|20)\d{2})',
+            r'(?:Expected)\s*in\s*((?:19|20)\d{2})',
         ]
         
         date = "Year not specified"
-        for pattern in year_patterns:
-            year_match = re.search(pattern, edu_text)
-            if year_match:
-                date = year_match.group().strip()
+        for pattern in date_patterns:
+            date_match = re.search(pattern, edu_text)
+            if date_match:
+                date = date_match.group(1).strip()
                 break
         
-        return {
+        # GPA extraction
+        gpa = ""
+        gpa_patterns = [
+            r'GPA\s*:?\s*([0-9]\.[0-9]{1,2})',
+            r'Grade\s+Point\s+Average\s*:?\s*([0-9]\.[0-9]{1,2})',
+            r'([0-9]\.[0-9]{1,2})\s+GPA',
+        ]
+        
+        for pattern in gpa_patterns:
+            gpa_match = re.search(pattern, edu_text)
+            if gpa_match:
+                gpa = gpa_match.group(1)
+                break
+        
+        # Validation - ensure we have meaningful data
+        if degree == "Degree" and not any(keyword.lower() in edu_text.lower() for keyword in ['university', 'college', 'institute', 'school']):
+            return None
+            
+        result = {
             'degree': degree,
-            'field': field,
+            'field': field if field else "Field not specified",
             'institution': institution,
             'date': date
         }
+        
+        if gpa:
+            result['gpa'] = gpa
+            
+        return result
+        
     except Exception as e:
-        print(f"DEBUG - Error parsing education: {e}")
         return None
-
+    
 def print_profile(profile: dict):
     """Print formatted profile data"""
     print("=== EXTRACTED PROFILE DATA ===")
