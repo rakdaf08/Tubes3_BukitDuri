@@ -157,33 +157,49 @@ def extract_profile_data(text: str) -> dict:
                             experiences = [exp_entry]
                 
                 profile["experience"] = experiences
-                break
-
-        # SIGNIFICANTLY IMPROVED EDUCATION EXTRACTION
+                break        # SIMPLIFIED EDUCATION EXTRACTION - RAW TEXT ONLY
         edu_patterns = [
-            r"(?i)(?:Education|Educational\s+Background|Academic\s+Background|Education\s+and\s+Training)\s*:?\s*\n(.*?)(?=\n\s*(?:Experience|Work|Skills|Certifications|References|Training|Professional|Additional\s+Information|EXPERIENCE|WORK|SKILLS)|\Z)",
-            # Alternative pattern for education at the end
-            r"(?i)Education\s*:?\s*\n?(.*?)(?=\n\s*(?:Skills|Professional\s+Affiliations|Additional\s+Information|References|Interests|Activities|Certifications)|\Z)",
+            # Main education section pattern - capture everything until next major section
+            r"(?i)(?:Education|Educational\s+Background|Academic\s+Background|Academic\s+Qualifications|EDUCATION)\s*:?\s*,?\s*\n(.*?)(?=\n\s*(?:Experience|Work\s+History|Professional\s+Experience|Employment|Skills|Technical\s+Skills|Core\s+Skills|Certifications|References|Training|Summary|Overview|Professional\s+Summary|Accomplishments|Awards|Highlights|EXPERIENCE|WORK|SKILLS|CERTIFICATIONS|REFERENCES|TRAINING|SUMMARY|OVERVIEW|HIGHLIGHTS)|\Z)",
         ]
         
         for pattern in edu_patterns:
             match = re.search(pattern, text, re.DOTALL)
             if match:
                 edu_section = match.group(1).strip()
-                education_entries = []
                 
-                # IMPROVED: Multiple splitting strategies
-                entries = split_education_entries(edu_section)
+                # Clean up the text but keep structure
+                lines = [line.strip() for line in edu_section.split('\n') if line.strip()]
                 
-                for entry_text in entries:
-                    if len(entry_text.strip()) > 15:  # Minimum viable education entry
-                        edu_entry = parse_single_education_improved(entry_text)
-                        if edu_entry and edu_entry['degree'] != "Degree":  # Valid entry
-                            education_entries.append(edu_entry)
+                # Filter out lines that are clearly not education related and remove excessive empty lines
+                filtered_lines = []
+                empty_line_count = 0
                 
-                if education_entries:
-                    profile["education"] = education_entries
-                    break
+                for line in lines:
+                    # Skip lines that are clearly section headers for other sections
+                    if re.match(r'(?i)^(Experience|Work|Skills|Employment|Training|Certifications|References|Summary|Overview|Highlights)', line):
+                        break  # Stop processing when we hit another section
+                    
+                    if line.strip() == "":
+                        empty_line_count += 1
+                        if empty_line_count >= 5:  # Stop if more than 5 consecutive empty lines
+                            break
+                    else:
+                        empty_line_count = 0
+                        filtered_lines.append(line)
+                
+                # Create one education entry with raw text
+                if filtered_lines and len('\n'.join(filtered_lines)) > 20:
+                    education_raw_text = '\n'.join(filtered_lines)
+                    profile["education"] = [{
+                        "raw_text": education_raw_text,
+                        "degree": "Education Background",
+                        "institution": "Multiple Institutions",
+                        "date": "Multiple Years",
+                        "field": ""
+                    }]
+                break
+
     except Exception as e:
         print(f"DEBUG - Error in extract_profile_data: {e}")
 
