@@ -841,7 +841,7 @@ class MainApplication(QApplication):
         super().__init__(sys_argv)
         self.setApplicationName("Bukit Duri CV Analyzer")
         self.load_fonts()
-        self.check_database_setup()
+        self.show_main_app()
     
     def load_fonts(self):
         """Load custom fonts for the application"""

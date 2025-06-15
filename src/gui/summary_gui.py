@@ -30,7 +30,25 @@ class SummaryPage(QWidget):
         self.skills_per_page = 12
         self.items_per_page = 2
         
+        # Cache extracted data to avoid multiple extractions
+        self._cached_profile = None
+        
         self.init_ui()
+
+    def get_cached_profile(self):
+        """Get cached profile data to avoid multiple extractions"""
+        if self._cached_profile is None:
+            content = self.resume_data.get('extracted_text', '') or self.resume_data.get('content', '')
+            if content:
+                try:
+                    self._cached_profile = extract_profile_data(content)
+                    print(f"DEBUG - Cached profile with {len(self._cached_profile.get('experience', []))} experiences and {len(self._cached_profile.get('education', []))} education entries")
+                except Exception as e:
+                    print(f"DEBUG - Error caching profile: {e}")
+                    self._cached_profile = {}
+            else:
+                self._cached_profile = {}
+        return self._cached_profile
 
     def init_ui(self): 
         scroll = QScrollArea()
@@ -149,9 +167,8 @@ class SummaryPage(QWidget):
         profile_main_layout = QHBoxLayout()
         profile_main_layout.setSpacing(20)
         
-        # Left container - Personal Info
         left_container = QWidget()
-        left_container.setFixedSize(530, 350)
+        left_container.setFixedSize(450, 320)  
         left_container.setStyleSheet("""
             QWidget {
                 background-color: #037F68;
@@ -160,69 +177,60 @@ class SummaryPage(QWidget):
             }
         """)
         left_layout = QVBoxLayout(left_container)
-        left_layout.setContentsMargins(25, 30, 25, 30)
-        left_layout.setSpacing(15)
+        left_layout.setContentsMargins(20, 20, 20, 20)  
+        left_layout.setSpacing(12)  
         
         # Birth date
-        birth_date = self.resume_data.get('date_of_birth', '05-19-2025')
-        if hasattr(birth_date, 'strftime'):
-            birth_date = birth_date.strftime('%m-%d-%Y')
-        elif birth_date is None:
-            birth_date = 'Not specified'
-        else:
-            birth_date = str(birth_date)
+        birth_date = self.safe_str(self.resume_data.get('date_of_birth'), '01-12-2003')
         
         birth_label = QLabel("Birthdate")
-        birth_label.setFont(QFont("Arial", 24, QFont.Bold))
-        birth_label.setStyleSheet("color: white; background: transparent; margin: 0px; padding: 3px 0px;")
+        birth_label.setFont(QFont("Arial", 18, QFont.Bold))  
+        birth_label.setStyleSheet("color: white; background: transparent; margin: 0px; padding: 2px 0px;")
         birth_value = QLabel(birth_date)
-        birth_value.setFont(QFont("Arial", 20))
-        birth_value.setStyleSheet("color: white; background: transparent; margin: 0px; padding: 3px 0px 8px 0px;")
-        birth_value.setMinimumHeight(30)
+        birth_value.setFont(QFont("Arial", 14)) 
+        birth_value.setStyleSheet("color: white; background: transparent; margin: 0px; padding: 2px 0px 6px 0px;")
+        birth_value.setMinimumHeight(25)  
         left_layout.addWidget(birth_label)
         left_layout.addWidget(birth_value)
         
         # Address
-        address = self.resume_data.get('address', 'Mesjid Salman ITB')
-        address = str(address) if address is not None else 'Address not specified'
+        address = self.safe_str(self.resume_data.get('address'), 'Jl. Bayam No. 11, Pangkalpinang')
         
         address_label = QLabel("Address")
-        address_label.setFont(QFont("Arial", 24, QFont.Bold))
-        address_label.setStyleSheet("color: white; background: transparent; margin: 0px; padding: 3px 0px;")
+        address_label.setFont(QFont("Arial", 18, QFont.Bold))  
+        address_label.setStyleSheet("color: white; background: transparent; margin: 0px; padding: 2px 0px;")
         address_value = QLabel(address)
-        address_value.setFont(QFont("Arial", 20))
-        address_value.setStyleSheet("color: white; background: transparent; margin: 0px; padding: 3px 0px 8px 0px;")
+        address_value.setFont(QFont("Arial", 14))  
+        address_value.setStyleSheet("color: white; background: transparent; margin: 0px; padding: 2px 0px 6px 0px;")
         address_value.setWordWrap(True)
-        address_value.setMinimumHeight(30)
+        address_value.setMinimumHeight(25)  
         left_layout.addWidget(address_label)
         left_layout.addWidget(address_value)
         
         # Phone number
-        phone = self.resume_data.get('phone_number', '+6281031231940')
-        phone = str(phone) if phone is not None else 'Phone not specified'
+        phone = self.safe_str(self.resume_data.get('phone_number'), '082154321987')
         
         phone_label = QLabel("Phone")
-        phone_label.setFont(QFont("Arial", 24, QFont.Bold))
-        phone_label.setStyleSheet("color: white; background: transparent; margin: 0px; padding: 3px 0px;")
+        phone_label.setFont(QFont("Arial", 18, QFont.Bold))  
+        phone_label.setStyleSheet("color: white; background: transparent; margin: 0px; padding: 2px 0px;")
         phone_value = QLabel(phone)
-        phone_value.setFont(QFont("Arial", 20))
-        phone_value.setStyleSheet("color: white; background: transparent; margin: 0px; padding: 3px 0px 8px 0px;")
-        phone_value.setMinimumHeight(30)
+        phone_value.setFont(QFont("Arial", 14))  
+        phone_value.setStyleSheet("color: white; background: transparent; margin: 0px; padding: 2px 0px 6px 0px;")
+        phone_value.setMinimumHeight(25)  
         left_layout.addWidget(phone_label)
         left_layout.addWidget(phone_value)
         
         # Applying for
-        role = self.resume_data.get('application_role', 'Software Engineer')
-        role = str(role) if role is not None else 'Role not specified'
+        role = self.safe_str(self.resume_data.get('application_role'), 'Quality Control Inspector')
         
         role_label = QLabel("Applying for")
-        role_label.setFont(QFont("Arial", 24, QFont.Bold))
-        role_label.setStyleSheet("color: white; background: transparent; margin: 0px; padding: 3px 0px;")
+        role_label.setFont(QFont("Arial", 18, QFont.Bold))  
+        role_label.setStyleSheet("color: white; background: transparent; margin: 0px; padding: 2px 0px;")
         role_value = QLabel(role)
-        role_value.setFont(QFont("Arial", 20))
-        role_value.setStyleSheet("color: #FFE066; background: transparent; font-weight: bold; margin: 0px; padding: 3px 0px;")
+        role_value.setFont(QFont("Arial", 14))  
+        role_value.setStyleSheet("color: #FFE066; background: transparent; font-weight: bold; margin: 0px; padding: 2px 0px;")
         role_value.setWordWrap(True)
-        role_value.setMinimumHeight(30)
+        role_value.setMinimumHeight(25)  
         left_layout.addWidget(role_label)
         left_layout.addWidget(role_value)
 
@@ -233,9 +241,9 @@ class SummaryPage(QWidget):
         # Add stretch at top to center vertically
         right_layout.addStretch()
         
-        # Skills title - BOLD and centered vertically with profile info
+        # Skills title - REDUCED SIZE
         skills_title = QLabel("Skills")
-        skills_title.setFont(QFont("Arial", 24, QFont.Bold))
+        skills_title.setFont(QFont("Arial", 20, QFont.Bold)) 
         skills_title.setStyleSheet("color: white; background: transparent;")
         skills_title.setAlignment(Qt.AlignCenter)
         right_layout.addWidget(skills_title)
@@ -244,7 +252,7 @@ class SummaryPage(QWidget):
         self.skills_container_profile = QWidget()
         self.skills_layout_profile = QVBoxLayout(self.skills_container_profile)
         self.skills_layout_profile.setContentsMargins(0, 0, 0, 0)
-        self.skills_layout_profile.setSpacing(8)
+        self.skills_layout_profile.setSpacing(6)  
         
         # Update skills display using existing function (modified)
         self.update_skills_display_for_profile()
@@ -259,7 +267,109 @@ class SummaryPage(QWidget):
         profile_main_layout.addLayout(right_layout)
         
         layout.addLayout(profile_main_layout)
-    
+
+    def update_skills_display_for_profile(self):
+        """Update skills display for profile section with smaller buttons"""
+        # Clear existing layout
+        self.clear_layout(self.skills_layout_profile)
+        
+        # Get all skills
+        all_skills = self.extract_skills_from_data()
+        
+        # Remove dummy HTML skills if we have real skills
+        if len(all_skills) > 1 and "No skills data available" not in all_skills:
+            all_skills = [skill for skill in all_skills if skill != "HTML"]
+        
+        # Calculate pagination (9 skills per page for 3x3 grid)
+        skills_per_page = 9
+        start_idx = self.skills_page * skills_per_page
+        end_idx = start_idx + skills_per_page
+        current_skills = all_skills[start_idx:end_idx]
+        
+        # Create 3x3 grid for current skills
+        skills_grid_widget = QWidget()
+        skills_grid_layout = QGridLayout(skills_grid_widget)
+        skills_grid_layout.setSpacing(6)  
+        skills_grid_layout.setContentsMargins(0, 0, 0, 0)
+        
+        for i, skill in enumerate(current_skills):
+            # Truncate skill text if too long
+            truncated_skill = self.truncate_skill_text(skill, max_chars=20)  
+            
+            skill_btn = QPushButton(truncated_skill)
+            skill_btn.setFixedHeight(30)  
+            skill_btn.setFixedWidth(160)  
+            skill_btn.setStyleSheet("""
+                QPushButton {
+                    background-color: #037F68;
+                    color: white;
+                    border-radius: 5px;
+                    font-size: 11px;
+                    font-weight: bold;
+                    padding: 4px 6px;
+                    border: 1px solid #2BBA91;
+                    text-align: center;
+                }
+                QPushButton:hover {
+                    background-color: #2BBA91;
+                }
+            """)
+            
+            row = i // 3
+            col = i % 3
+            skills_grid_layout.addWidget(skill_btn, row, col)
+        
+        self.skills_layout_profile.addWidget(skills_grid_widget)
+        
+        # Add pagination if needed
+        if len(all_skills) > skills_per_page:
+            nav_layout = QHBoxLayout()
+            nav_layout.setSpacing(4)
+            nav_layout.setAlignment(Qt.AlignCenter)
+            
+            prev_btn = QPushButton("←")
+            prev_btn.setEnabled(self.skills_page > 0)
+            prev_btn.setFixedSize(20, 20)  
+            prev_btn.clicked.connect(lambda: self.change_profile_skills_page(-1))
+            prev_btn.setStyleSheet("""
+                QPushButton {
+                    background-color: #037F68;
+                    color: white;
+                    border-radius: 10px;
+                    font-weight: bold;
+                    font-size: 12px;
+                }
+                QPushButton:hover { background-color: #2BBA91; }
+                QPushButton:disabled { background-color: #555555; }
+            """)
+            
+            total_pages = (len(all_skills) - 1) // skills_per_page + 1
+            page_info = QLabel(f"{self.skills_page + 1}/{total_pages}")
+            page_info.setStyleSheet("color: white; font-size: 10px;")  
+            page_info.setAlignment(Qt.AlignCenter)
+            
+            next_btn = QPushButton("→")
+            next_btn.setEnabled(end_idx < len(all_skills))
+            next_btn.setFixedSize(20, 20)  
+            next_btn.clicked.connect(lambda: self.change_profile_skills_page(1))
+            next_btn.setStyleSheet("""
+                QPushButton {
+                    background-color: #037F68;
+                    color: white;
+                    border-radius: 10px;
+                    font-weight: bold;
+                    font-size: 12px;
+                }
+                QPushButton:hover { background-color: #2BBA91; }
+                QPushButton:disabled { background-color: #555555; }
+            """)
+            
+            nav_layout.addWidget(prev_btn)
+            nav_layout.addWidget(page_info)
+            nav_layout.addWidget(next_btn)
+            
+            self.skills_layout_profile.addLayout(nav_layout)
+
     def safe_str(self, value, default="Not specified"):
         """Safely convert any value to string for display"""
         if value is None:
@@ -312,7 +422,7 @@ class SummaryPage(QWidget):
         layout.addWidget(overview_container)
 
     def create_job_history_section(self, layout):
-        """Create job history section WITHOUT container"""
+        """Create job history section - MODIFIED untuk menampilkan setiap job terpisah"""
         # Job History title
         job_title = QLabel("Job History")
         job_title.setFont(QFont("Arial", 28, QFont.Bold))
@@ -320,17 +430,17 @@ class SummaryPage(QWidget):
         job_title.setAlignment(Qt.AlignCenter)
         layout.addWidget(job_title)
 
-        # Job History layout (NO CONTAINER)
+        # Job History layout
         self.job_layout = QVBoxLayout()
         self.job_layout.setSpacing(15)
 
-        # Update job history display
-        self.update_job_history_display()
+        # Update job history display - MODIFIED
+        self.update_job_history_display_separated()
         
-        layout.addLayout(self.job_layout)  # Add layout directly, not container
+        layout.addLayout(self.job_layout)
 
     def create_education_section(self, layout):
-        """Create education section like Professional Overview"""
+        """Create education section - MODIFIED untuk menampilkan setiap education terpisah"""
         # Education title
         edu_title = QLabel("Education")
         edu_title.setFont(QFont("Arial", 28, QFont.Bold))
@@ -353,8 +463,8 @@ class SummaryPage(QWidget):
         self.edu_layout.setContentsMargins(25, 25, 25, 25)
         self.edu_layout.setSpacing(15)
 
-        # Update education display
-        self.update_education_display_new()
+        # Update education display - MODIFIED
+        self.update_education_display_separated()
         
         layout.addWidget(edu_container)
 
@@ -366,111 +476,9 @@ class SummaryPage(QWidget):
                 child.widget().deleteLater()
             elif child.layout():
                 self.clear_layout(child.layout())
-                
-    def update_skills_display_for_profile(self):
-        """Update skills display for profile section with wider buttons"""
-        # Clear existing layout
-        self.clear_layout(self.skills_layout_profile)
-        
-        # Get all skills
-        all_skills = self.extract_skills_from_data()
-        
-        # Remove dummy HTML skills if we have real skills
-        if len(all_skills) > 1 and "No skills data available" not in all_skills:
-            all_skills = [skill for skill in all_skills if skill != "HTML"]
-        
-        # Calculate pagination (9 skills per page for 3x3 grid)
-        skills_per_page = 9
-        start_idx = self.skills_page * skills_per_page
-        end_idx = start_idx + skills_per_page
-        current_skills = all_skills[start_idx:end_idx]
-        
-        # Create 3x3 grid for current skills
-        skills_grid_widget = QWidget()
-        skills_grid_layout = QGridLayout(skills_grid_widget)
-        skills_grid_layout.setSpacing(8)
-        skills_grid_layout.setContentsMargins(0, 0, 0, 0)
-        
-        for i, skill in enumerate(current_skills):
-            # Truncate skill text if too long
-            truncated_skill = self.truncate_skill_text(skill, max_chars=25)
-            
-            skill_btn = QPushButton(truncated_skill)
-            skill_btn.setFixedHeight(35)
-            skill_btn.setFixedWidth(180)
-            skill_btn.setStyleSheet("""
-                QPushButton {
-                    background-color: #037F68;
-                    color: white;
-                    border-radius: 6px;
-                    font-size: 12px;
-                    font-weight: bold;
-                    padding: 6px 8px;
-                    border: 1px solid #2BBA91;
-                    text-align: center;
-                }
-                QPushButton:hover {
-                    background-color: #2BBA91;
-                }
-            """)
-            
-            row = i // 3
-            col = i % 3
-            skills_grid_layout.addWidget(skill_btn, row, col)
-        
-        self.skills_layout_profile.addWidget(skills_grid_widget)
-        
-        # Add pagination if needed
-        if len(all_skills) > skills_per_page:
-            nav_layout = QHBoxLayout()
-            nav_layout.setSpacing(5)
-            nav_layout.setAlignment(Qt.AlignCenter)
-            
-            prev_btn = QPushButton("←")
-            prev_btn.setEnabled(self.skills_page > 0)
-            prev_btn.setFixedSize(25, 25)
-            prev_btn.clicked.connect(lambda: self.change_profile_skills_page(-1))
-            prev_btn.setStyleSheet("""
-                QPushButton {
-                    background-color: #037F68;
-                    color: white;
-                    border-radius: 12px;
-                    font-weight: bold;
-                    font-size: 14px;
-                }
-                QPushButton:hover { background-color: #2BBA91; }
-                QPushButton:disabled { background-color: #555555; }
-            """)
-            
-            total_pages = (len(all_skills) - 1) // skills_per_page + 1
-            page_info = QLabel(f"{self.skills_page + 1}/{total_pages}")
-            page_info.setStyleSheet("color: white; font-size: 11px;")
-            page_info.setAlignment(Qt.AlignCenter)
-            
-            next_btn = QPushButton("→")
-            next_btn.setEnabled(end_idx < len(all_skills))
-            next_btn.setFixedSize(25, 25)
-            next_btn.clicked.connect(lambda: self.change_profile_skills_page(1))
-            next_btn.setStyleSheet("""
-                QPushButton {
-                    background-color: #037F68;
-                    color: white;
-                    border-radius: 12px;
-                    font-weight: bold;
-                    font-size: 14px;
-                }
-                QPushButton:hover { background-color: #2BBA91; }
-                QPushButton:disabled { background-color: #555555; }
-            """)
-            
-            nav_layout.addWidget(prev_btn)
-            nav_layout.addWidget(page_info)
-            nav_layout.addWidget(next_btn)
-            
-            self.skills_layout_profile.addLayout(nav_layout)
 
-    def update_job_history_display(self):
-        """Update job history display with 2x2 grid layout"""
+    def update_job_history_display_separated(self):
+        """MODIFIED - Update job history display dengan setiap job terpisah dalam card individual"""
         experience_data = self.extract_experience()
         
         if not experience_data:
@@ -481,30 +489,31 @@ class SummaryPage(QWidget):
             self.job_layout.addWidget(placeholder_text)
             return
 
-        # Calculate pagination (4 items per page for 2x2 grid)
-        items_per_page = 4
+        # Calculate pagination (2 items per page)
+        items_per_page = 2
         start_idx = self.experience_page * items_per_page
         end_idx = start_idx + items_per_page
         current_experiences = experience_data[start_idx:end_idx]
 
-        # Create 2x2 grid layout
-        grid_layout = QGridLayout()
-        grid_layout.setSpacing(20)
+        # Create layout untuk menampilkan setiap job dalam card terpisah
+        jobs_container = QVBoxLayout()
+        jobs_container.setSpacing(20)
         
         for i, exp in enumerate(current_experiences):
-            # Create job box (530x150)
-            job_box = QWidget()
-            job_box.setFixedSize(530, 150)
-            job_box.setStyleSheet("""
-                QWidget {
+            # Create individual job card dengan background
+            job_card = QGroupBox()
+            job_card.setStyleSheet("""
+                QGroupBox {
                     background-color: #A5C5BE;
                     border-radius: 10px;
+                    padding: 20px;
+                    margin: 10px 0px;
                 }
             """)
             
-            job_layout = QVBoxLayout(job_box)
+            job_layout = QVBoxLayout(job_card)
             job_layout.setContentsMargins(20, 15, 20, 15)
-            job_layout.setSpacing(5)
+            job_layout.setSpacing(8)
             job_layout.setAlignment(Qt.AlignTop)
             
             # Position title (Bold, Size 24, Color #051010)
@@ -524,8 +533,8 @@ class SummaryPage(QWidget):
             
             # Description (Regular, Size 16, Color #051010)
             desc_text = exp.get('description', 'Detailed responsibilities available in full CV.')
-            if len(desc_text) > 120:
-                desc_text = desc_text[:120] + "..."
+            if len(desc_text) > 200:
+                desc_text = desc_text[:200] + "..."
             
             desc_label = QLabel(desc_text)
             desc_label.setFont(QFont("Arial", 16))
@@ -533,14 +542,15 @@ class SummaryPage(QWidget):
             desc_label.setWordWrap(True)
             job_layout.addWidget(desc_label)
             
-            # Add to grid (2x2 layout)
-            row = i // 2
-            col = i % 2
-            grid_layout.addWidget(job_box, row, col)
+            # Add individual job card to container
+            jobs_container.addWidget(job_card)
         
-        self.job_layout.addLayout(grid_layout)
+        # Add jobs container to main layout
+        jobs_widget = QWidget()
+        jobs_widget.setLayout(jobs_container)
+        self.job_layout.addWidget(jobs_widget)
 
-        # Compact Navigation
+        # Navigation
         if len(experience_data) > items_per_page:
             nav_layout = QHBoxLayout()
             nav_layout.setSpacing(8)
@@ -589,8 +599,8 @@ class SummaryPage(QWidget):
             
             self.job_layout.addLayout(nav_layout)
 
-    def update_education_display_new(self):
-        """Update education display without item backgrounds"""
+    def update_education_display_separated(self):
+        """MODIFIED - Update education display dengan setiap education terpisah"""
         education_data = self.extract_education()
         
         if not education_data:
@@ -606,30 +616,49 @@ class SummaryPage(QWidget):
         end_idx = start_idx + self.items_per_page
         current_education = education_data[start_idx:end_idx]
 
-        # Display education entries WITHOUT background containers
+        # Display education entries - SETIAP EDUCATION DALAM CARD TERPISAH
         for edu in current_education:
-            # Degree with field - NO BACKGROUND
+            # Create individual education card
+            edu_card = QGroupBox()
+            edu_card.setStyleSheet("""
+                QGroupBox {
+                    background-color: #2A5A50;
+                    border-radius: 10px;
+                    border: 1px solid #037F68;
+                    padding: 15px;
+                    margin: 8px 0px;
+                }
+            """)
+            
+            edu_card_layout = QVBoxLayout(edu_card)
+            edu_card_layout.setContentsMargins(15, 12, 15, 12)
+            edu_card_layout.setSpacing(6)
+            
+            # Degree with field 
             degree_text = edu.get('degree', 'Degree')
-            if edu.get('field', '') and edu.get('field', '').strip():
+            if edu.get('field', '') and edu.get('field', '').strip() and edu.get('field', '') != 'Field of Study':
                 degree_text += f" in {edu.get('field', '')}"
             
             degree_label = QLabel(degree_text)
             degree_label.setFont(QFont("Arial", 18, QFont.Bold))
-            degree_label.setStyleSheet("color: white; background: transparent; margin-bottom: 5px;")
+            degree_label.setStyleSheet("color: #00FFC6; background: transparent; margin-bottom: 5px;")
             degree_label.setWordWrap(True)
             
-            # Institution and Year - NO BACKGROUND
+            # Institution and Year 
             institution_text = edu.get('institution', 'Institution')
             if edu.get('date', '') and edu.get('date', '') != 'Year not specified':
                 institution_text += f" • {edu.get('date', '')}"
             
             info_label = QLabel(institution_text)
             info_label.setFont(QFont("Arial", 14))
-            info_label.setStyleSheet("color: #00FFC6; background: transparent; margin-bottom: 20px;")
+            info_label.setStyleSheet("color: white; background: transparent; margin-bottom: 8px;")
             info_label.setWordWrap(True)
             
-            self.edu_layout.addWidget(degree_label)
-            self.edu_layout.addWidget(info_label)
+            edu_card_layout.addWidget(degree_label)
+            edu_card_layout.addWidget(info_label)
+            
+            # Add individual education card to main layout
+            self.edu_layout.addWidget(edu_card)
 
         # Navigation
         if len(education_data) > self.items_per_page:
@@ -679,145 +708,89 @@ class SummaryPage(QWidget):
             self.edu_layout.addLayout(nav_layout)
 
     def extract_skills_from_data(self):
-        """Extract skills using extractor.py functions"""
-        content = self.resume_data.get('extracted_text', '') or self.resume_data.get('content', '')
-        
-        if not content:
-            # Fallback ke database skills field
-            skills_text = self.resume_data.get('skills', '')
-            if skills_text and skills_text.strip():
-                skills = [skill.strip() for skill in skills_text.split(',') if skill.strip()]
-                return skills if skills else ["No skills data available"]
-            return ["No skills data available"]
-        
-        # Gunakan fungsi dari extractor.py
+        """Extract skills using cached profile data"""
         try:
-            profile = extract_profile_data(content)
+            profile = self.get_cached_profile()
             skills = profile.get('skills', [])
             
-            # Filter out empty or invalid skills
-            valid_skills = [skill for skill in skills if skill and len(skill.strip()) > 1]
-            
-            # Jika tidak ada skills dari extractor, coba dari database
-            if not valid_skills:
-                skills_text = self.resume_data.get('skills', '')
-                if skills_text and skills_text.strip():
-                    valid_skills = [skill.strip() for skill in skills_text.split(',') if skill.strip() and len(skill.strip()) > 1]
-            
-            return valid_skills if valid_skills else ["No skills data available"]
+            print(f"DEBUG - Using cached skills: {len(skills)} found")
+            return skills if skills else ["No skills data available"]
         except Exception as e:
             print(f"Error extracting skills: {e}")
             return ["Skills extraction error"]
-    
+
     def extract_experience(self):
-        """Extract work experience using extractor.py functions"""
-        content = self.resume_data.get('extracted_text', '') or self.resume_data.get('content', '')
-        
-        if not content:
-            return []
-        
+        """Extract work experience using cached profile data - FIXED untuk mendapatkan semua data"""
         try:
-            # Gunakan fungsi dari extractor.py
-            profile = extract_profile_data(content)
+            profile = self.get_cached_profile()
+            experiences = profile.get('experience', [])
             
-            # Convert ke format yang dibutuhkan summary_gui
-            experiences = []
-            for exp in profile.get('experience', []):
-                # Ensure all required fields exist and are properly formatted
-                title = exp.get('title', '').strip() or 'Position'
-                company = exp.get('company', '').strip() or 'Company Name'
-                start = exp.get('start', '').strip()
-                end = exp.get('end', '').strip()
-                description = exp.get('description', '').strip() or 'Detailed responsibilities available in full CV.'
-                
-                # Format period properly
-                if start and end:
-                    period = f"{start} - {end}"
-                elif start:
-                    period = f"{start} - Present"
-                elif end:
-                    period = f"Until {end}"
-                else:
-                    period = "Period not specified"
-                
-                experiences.append({
-                    'title': title,
-                    'company': company,  
-                    'period': period,
-                    'description': description
-                })
+            print(f"DEBUG - Using cached experiences: {len(experiences)} found")
             
-            return experiences
+            # Convert to expected format
+            formatted_experiences = []
+            for exp in experiences:
+                if isinstance(exp, dict):
+                    formatted_exp = {
+                        'title': exp.get('title', 'Position'),
+                        'company': exp.get('company', 'Company'),
+                        'period': f"{exp.get('start', 'Start')} - {exp.get('end', 'End')}",
+                        'description': exp.get('description', 'Job responsibilities and achievements.')
+                    }
+                    formatted_experiences.append(formatted_exp)
+            
+            return formatted_experiences
+            
         except Exception as e:
-            print(f"Error extracting experience: {e}")
+            print(f"DEBUG - Error extracting experience: {e}")
             return []
 
     def extract_education(self):
-        """Extract education using extractor.py functions"""
-        content = self.resume_data.get('extracted_text', '') or self.resume_data.get('content', '')
-        
-        if not content:
-            return []
-        
+        """Extract education using cached profile data - FIXED untuk mendapatkan semua data"""
         try:
-            # Gunakan fungsi dari extractor.py
-            profile = extract_profile_data(content)
+            profile = self.get_cached_profile()
+            education = profile.get('education', [])
             
-            # Convert ke format yang dibutuhkan summary_gui
-            education = []
-            for edu in profile.get('education', []):
-                # Ensure all fields are properly formatted
-                degree = edu.get('degree', '').strip() or 'Degree'
-                field = edu.get('field', '').strip() or 'Field of Study'
-                institution = edu.get('institution', '').strip() or 'Institution'
-                date = edu.get('date', '').strip() or 'Year not specified'
-                
-                education.append({
-                    'degree': degree,
-                    'field': field,
-                    'institution': institution,
-                    'date': date
-                })
+            print(f"DEBUG - Using cached education: {len(education)} found")
             
-            return education
+            # Convert to expected format
+            formatted_education = []
+            for edu in education:
+                if isinstance(edu, dict):
+                    formatted_edu = {
+                        'degree': edu.get('degree', 'Degree'),
+                        'field': edu.get('field', ''),
+                        'institution': edu.get('institution', 'Institution'),
+                        'date': edu.get('date', 'Year not specified')
+                    }
+                    formatted_education.append(formatted_edu)
+            
+            return formatted_education
+            
         except Exception as e:
-            print(f"Error extracting education: {e}")
+            print(f"DEBUG - Error extracting education: {e}")
             return []
-    
+
     def extract_overview(self):
-        """Extract overview using extractor.py functions"""
-        content = self.resume_data.get('extracted_text', '') or self.resume_data.get('content', '')
-        
-        if not content:
-            return "Professional summary will be extracted from the CV document once processed."
-        
+        """Extract overview using cached profile data"""
         try:
-            # Gunakan fungsi dari extractor.py
-            profile = extract_profile_data(content)
-            overview = profile.get('overview')
+            profile = self.get_cached_profile()
+            overview = profile.get('overview', '')
             
             if overview and len(overview.strip()) > 50:
-                # Clean up the overview text
-                overview = overview.strip()
-                # Remove extra whitespace
-                overview = ' '.join(overview.split())
                 return overview
             
-            # Fallback jika overview tidak ditemukan
-            return "Experienced professional with demonstrated skills and accomplishments in their field. This candidate brings valuable expertise and a proven track record."
+            # Fallback
+            return "No overview has found. Experienced professional with demonstrated skills and accomplishments in their field."
+            
         except Exception as e:
-            print(f"Error extracting overview: {e}")
+            print(f"DEBUG - Error extracting overview: {e}")
             return "Professional summary will be extracted from the CV document once processed."
 
     def extract_gpa(self):
-        """Extract GPA using extractor.py functions"""
-        content = self.resume_data.get('extracted_text', '') or self.resume_data.get('content', '')
-        
-        if not content:
-            return None
-        
+        """Extract GPA using cached profile data"""
         try:
-            profile = extract_profile_data(content)
+            profile = self.get_cached_profile()
             gpa_list = profile.get('gpa', [])
             
             return gpa_list[0] if gpa_list else None
@@ -826,28 +799,18 @@ class SummaryPage(QWidget):
             return None
 
     def extract_certifications(self):
-        """Extract certifications using extractor.py functions"""
-        content = self.resume_data.get('extracted_text', '') or self.resume_data.get('content', '')
-        
-        if not content:
-            return []
-        
+        """Extract certifications using cached profile data"""
         try:
-            profile = extract_profile_data(content)
+            profile = self.get_cached_profile()
             return profile.get('certifications', [])
         except Exception as e:
             print(f"Error extracting certifications: {e}")
             return []
 
     def extract_achievements(self):
-        """Extract achievements using extractor.py functions"""
-        content = self.resume_data.get('extracted_text', '') or self.resume_data.get('content', '')
-        
-        if not content:
-            return []
-        
+        """Extract achievements using cached profile data"""
         try:
-            profile = extract_profile_data(content)
+            profile = self.get_cached_profile()
             return profile.get('achievements', [])
         except Exception as e:
             print(f"Error extracting achievements: {e}")
@@ -867,24 +830,27 @@ class SummaryPage(QWidget):
         self.update_skills_display_for_profile()
     
     def change_experience_page(self, direction):
-        """Change experience page"""
+        """Change experience page - MODIFIED"""
         self.experience_page += direction
         # Clear existing layout safely
         self.clear_layout(self.job_layout)
         # Update display
-        self.update_job_history_display()
+        self.update_job_history_display_separated()
 
     def change_education_page(self, direction):
-        """Change education page"""
+        """Change education page - MODIFIED"""
         self.education_page += direction
         # Clear existing layout safely
         self.clear_layout(self.edu_layout)
         # Update display
-        self.update_education_display_new()
+        self.update_education_display_separated()
 
     def go_back(self):
         """Go back to previous window"""
-        self.close()
+        try:
+            self.close()
+        except Exception as e:
+            print(f"DEBUG - Error in go_back: {e}")
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)

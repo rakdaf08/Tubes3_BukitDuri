@@ -11,14 +11,15 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 parent_dir = os.path.dirname(current_dir)
 sys.path.append(parent_dir)
 
-# Import GUI components
-from gui.summary_gui import SummaryPage
+# Import GUI components - FIXED IMPORT PATH
+from gui.summary_gui import SummaryPage  # Changed from gui.summary_gui
 from src.db.db_connector import DatabaseManager
 
 class CVCard(QWidget):
-    def __init__(self, name, matches, skills, resume_id=None):
+    def __init__(self, name, matches, skills, resume_id=None, parent_window=None):
         super().__init__()
         self.resume_id = resume_id
+        self.parent_window = parent_window  # Reference to parent window
         self.setFixedSize(350, 300)
         self.setStyleSheet("background-color: #1a1a1a;") 
 
@@ -96,70 +97,85 @@ class CVCard(QWidget):
         self.setLayout(outer_layout)
     
     def view_more_clicked(self):
+        """FIXED - Handle view more button click using DatabaseManager"""
         try:
-            current_dir = os.path.dirname(os.path.abspath(__file__))
-            sys.path.append(current_dir)
+            if not self.resume_id:
+                QMessageBox.warning(self, "Warning", "No resume ID available.")
+                return
             
-            db = DatabaseManager()
-            if db.connect():
-                resume = db.get_resume_by_id(self.resume_id)
-                if resume:
-                    display_name = ""
-                    if resume.get('first_name') and resume.get('last_name'):
-                        display_name = f"{resume['first_name']} {resume['last_name']}"
-                    elif resume.get('first_name'):
-                        display_name = resume['first_name']
-                    elif resume.get('last_name'):
-                        display_name = resume['last_name']
-                    else:
-                        display_name = resume['filename'].replace('.pdf', '')
-                    
-                    resume_data = {
-                        'name': display_name,
-                        'first_name': resume.get('first_name'),
-                        'last_name': resume.get('last_name'),
-                        'date_of_birth': resume.get('date_of_birth'),
-                        'address': resume.get('address'),
-                        'phone_number': resume.get('phone_number'),
-                        'application_role': resume.get('application_role'),
-                        'skills': resume['skills'] if resume['skills'] else 'No skills data available',
-                        'experience': resume['experience'] if resume['experience'] else '',
-                        'education': resume['education'] if resume['education'] else '',
-                        'gpa': resume['gpa'] if resume['gpa'] else None,
-                        'certifications': resume['certifications'] if resume['certifications'] else '',
-                        'category': resume.get('category', 'Unknown'),
-                        'resume_id': self.resume_id,
-                        'file_path': resume['file_path'],
-                        'extracted_text': resume.get('extracted_text', '') or resume.get('content', ''),
-                        'created_at': resume.get('created_at', 'Unknown'),
-                        'filename': resume.get('filename')
-                    }
-                    
-                    print(f"DEBUG - Resume data being sent to summary:")
-                    print(f"Name: {resume_data['name']}")
-                    print(f"First Name: {resume_data['first_name']}")
-                    print(f"Last Name: {resume_data['last_name']}")
-                    print(f"Date of Birth: {resume_data['date_of_birth']}")
-                    print(f"Address: {resume_data['address']}")
-                    print(f"Phone: {resume_data['phone_number']}")
-                    
-                    self.summary_page = SummaryPage(resume_data)
-                    self.summary_page.show()
-                else:
-                    QMessageBox.information(self, "Error", "Resume data not found in database")
-                db.disconnect()
-            else:
-                QMessageBox.critical(self, "Database Error", "Could not connect to database")
+            print(f"DEBUG - Opening summary for resume ID: {self.resume_id}")
+            
+            # Use DatabaseManager for database operations
+            db_manager = DatabaseManager()
+            
+            if not db_manager.connect():
+                QMessageBox.warning(self, "Error", "Could not connect to database.")
+                return
+            
+            try:
+                # Get resume data using DatabaseManager
+                resume_data = db_manager.get_resume_by_id(self.resume_id)
+                
+                if not resume_data:
+                    QMessageBox.warning(self, "Warning", "Resume not found.")
+                    return
+                
+                print("DEBUG - Resume data being sent to summary:")
+                print(f"Name: {resume_data.get('first_name', '')} {resume_data.get('last_name', '')}")
+                print(f"First Name: {resume_data.get('first_name', 'N/A')}")
+                print(f"Last Name: {resume_data.get('last_name', 'N/A')}")
+                print(f"Date of Birth: {resume_data.get('date_of_birth', 'N/A')}")
+                print(f"Address: {resume_data.get('address', 'N/A')}")
+                print(f"Phone: {resume_data.get('phone_number', 'N/A')}")
+                
+                # Format data for summary page
+                formatted_data = {
+                    'id': resume_data.get('id'),
+                    'filename': resume_data.get('filename'),
+                    'extracted_text': resume_data.get('extracted_text', ''),
+                    'application_role': resume_data.get('application_role', 'Not specified'),
+                    'first_name': resume_data.get('first_name', 'N/A'),
+                    'last_name': resume_data.get('last_name', 'N/A'),
+                    'date_of_birth': resume_data.get('date_of_birth'),
+                    'address': resume_data.get('address', 'N/A'),
+                    'phone_number': resume_data.get('phone_number', 'N/A'),
+                    'content': resume_data.get('extracted_text', ''),  # Alias for extracted_text
+                    'skills': resume_data.get('skills', ''),
+                    'experience': resume_data.get('experience', ''),
+                    'education': resume_data.get('education', ''),
+                    'gpa': resume_data.get('gpa'),
+                    'certifications': resume_data.get('certifications', '')
+                }
+                
+                # Open summary page
+                self.summary_page = SummaryPage(formatted_data)
+                self.summary_page.show()
+                
+            finally:
+                # Always disconnect from database
+                db_manager.disconnect()
+                
         except Exception as e:
-            QMessageBox.critical(self, "Error", f"Could not open summary: {str(e)}")
-            print(f"DEBUG - Error in view_more_clicked: {e}")
+            print(f"DEBUG - In view_more_clicked: {e}")
 
     def view_cv_clicked(self):
+        """Handle view CV button click using DatabaseManager"""
         try:
-            db = DatabaseManager()
-            if db.connect():
-                resume = db.get_resume_by_id(self.resume_id)
-                if resume and resume['file_path']:
+            if not self.resume_id:
+                QMessageBox.warning(self, "Warning", "No resume ID available.")
+                return
+            
+            # Use DatabaseManager for database operations
+            db_manager = DatabaseManager()
+            
+            if not db_manager.connect():
+                QMessageBox.critical(self, "Database Error", "Could not connect to database")
+                return
+            
+            try:
+                resume = db_manager.get_resume_by_id(self.resume_id)
+                
+                if resume and resume.get('file_path'):
                     file_path = resume['file_path']
                     
                     # Check if file exists
@@ -176,20 +192,20 @@ class CVCard(QWidget):
                                         f"PDF file not found:\n{file_path}")
                 else:
                     QMessageBox.information(self, "No File", "No PDF file associated with this resume")
-                db.disconnect()
-            else:
-                QMessageBox.critical(self, "Database Error", "Could not connect to database")
+                    
+            finally:
+                db_manager.disconnect()
+                
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Could not open PDF:\n{str(e)}")
 
     def get_resume_data(self):
-        # Return resume data structure
+        """Return resume data structure"""
         return {
             'name': getattr(self, 'name', 'Unknown'),
             'skills': getattr(self, 'skills', {}),
             'resume_id': self.resume_id
         }
-
 
 
 class SearchApp(QWidget):
@@ -200,13 +216,27 @@ class SearchApp(QWidget):
         self.setMinimumSize(1280, 720)
 
         # === Data untuk cards ===
-        self.cv_data = [
-            ("Rakdaf", 4, {"React": 1, "Express": 2, "HTML": 1})
-        ] * 20  # Misal ada 20 data dummy
+        self.cv_data = []
         self.items_per_page = 6
         self.current_page = 0
 
+        # Initialize database manager
+        self.db_manager = DatabaseManager()
+
         self.initUI()
+
+    def setup_database_connection(self):
+        """Setup database connection using DatabaseManager"""
+        try:
+            if self.db_manager.connect():
+                print("Connected to MySQL database via DatabaseManager")
+                return True
+            else:
+                print("Failed to connect to database")
+                return False
+        except Exception as e:
+            print(f"Database connection error: {e}")
+            return False
 
     def initUI(self):
         self.main_layout = QVBoxLayout()
@@ -349,6 +379,7 @@ class SearchApp(QWidget):
             self.close()
 
     def perform_new_search(self):
+        """Perform new search using keywords"""
         keywords = self.keyword_input.text().strip()
         if not keywords:
             QMessageBox.warning(self, "Warning", "Please enter keywords!")
@@ -357,7 +388,7 @@ class SearchApp(QWidget):
         method = self.method_dropdown.currentText()
         top_matches = int(self.top_input.text() or "3")
         
-        # Fix import - import SearchWorker from main_gui
+        # Try to import SearchWorker from main_gui
         try:
             current_dir = os.path.dirname(os.path.abspath(__file__))
             parent_dir = os.path.dirname(current_dir)
@@ -381,6 +412,7 @@ class SearchApp(QWidget):
             print(f"SearchWorker import error: {e}")
 
     def update_search_results(self, results):
+        """Update search results"""
         if hasattr(self, 'loading_dialog'):
             self.loading_dialog.close()
         
@@ -403,11 +435,13 @@ class SearchApp(QWidget):
             self.results_label.setText(f"Found {len(self.cv_data)} resumes")
 
     def search_error(self, error_msg):
+        """Handle search error"""
         if hasattr(self, 'loading_dialog'):
             self.loading_dialog.close()
         QMessageBox.critical(self, "Search Error", f"Error: {error_msg}")
 
     def setupCardArea(self):
+        """Setup scrollable card area"""
         self.scroll = QScrollArea()
         self.scroll.setWidgetResizable(True)
         self.scroll.setStyleSheet("border: none;")
@@ -422,6 +456,7 @@ class SearchApp(QWidget):
         self.main_layout.addWidget(self.scroll)
 
     def updateCards(self):
+        """Update displayed cards based on current page"""
         # Clear existing widgets
         while self.grid.count():
             child = self.grid.takeAt(0)
@@ -453,7 +488,8 @@ class SearchApp(QWidget):
                 skills = {}
                 resume_id = None
             
-            card = CVCard(name, matches, skills, resume_id)
+            # FIXED - Pass parent window reference
+            card = CVCard(name, matches, skills, resume_id, parent_window=self)
             self.grid.addWidget(card, i // 3, i % 3)
 
         # Update pagination info
@@ -468,6 +504,7 @@ class SearchApp(QWidget):
                 self.next_btn.setEnabled(end < len(self.cv_data))
 
     def setupPagination(self):
+        """Setup pagination controls"""
         self.pagination_layout = QHBoxLayout()
         self.pagination_layout.setAlignment(Qt.AlignCenter)
 
@@ -525,18 +562,28 @@ class SearchApp(QWidget):
         self.pagination_layout.addWidget(self.next_btn)
 
         self.main_layout.addLayout(self.pagination_layout)
-        
-        # Remove the problematic line with undefined 'page' variable
 
     def goToPrevPage(self):
+        """Go to previous page"""
         if self.current_page > 0:
             self.current_page -= 1
             self.updateCards()
 
     def goToNextPage(self):
+        """Go to next page"""
         if (self.current_page + 1) * self.items_per_page < len(self.cv_data):
             self.current_page += 1
             self.updateCards()
+
+    def closeEvent(self, event):
+        """Clean up database connection when closing"""
+        if hasattr(self, 'db_manager'):
+            try:
+                self.db_manager.disconnect()
+                print("Database connection closed")
+            except:
+                pass
+        event.accept()
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
