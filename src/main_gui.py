@@ -62,6 +62,9 @@ class SearchWorker(QThread):
                 fuzzy_start_time = time.time()
                 fuzzy_results = self.perform_fuzzy_search(all_resumes, missing_keywords)
                 fuzzy_time = (time.time() - fuzzy_start_time) * 1000
+            else:
+                # Even if no missing keywords, set fuzzy_time to 0 for display
+                fuzzy_time = 0
             
             # Combine results
             combined_results = self.combine_results(exact_results, fuzzy_results)
@@ -69,15 +72,19 @@ class SearchWorker(QThread):
             # Sort by total matches and limit
             final_results = sorted(combined_results, key=lambda x: x['matches'], reverse=True)[:self.top_matches]
             
-            # Emit timing information
+            # ALWAYS emit timing information (even if fuzzy_time is 0)
             timing_data = {
                 'exact_time': exact_time,
                 'fuzzy_time': fuzzy_time,
                 'exact_count': len(exact_results),
                 'fuzzy_count': len(fuzzy_results),
                 'total_scanned': len(all_resumes),
-                'missing_keywords': missing_keywords
+                'missing_keywords': missing_keywords,
+                'method_used': self.method  # Add method info
             }
+            self._timing_data = timing_data
+            
+            print(f"DEBUG - Timing data: {timing_data}")  # Debug
             
             self.timing_info.emit(timing_data)
             self.results_ready.emit(final_results)
@@ -424,12 +431,22 @@ class IntegratedLandingPage(BukitDuriApp):
         # Create results window with search parameters
         self.results_window = IntegratedHomePage(results, search_params)
         
-        # Connect timing signal for landing page search too
-        if hasattr(self, 'search_worker'):
-            self.search_worker.timing_info.connect(self.results_window.update_timing_display)
+        # IMPORTANT: Connect timing signal AFTER results window is fully initialized
+        # Use QTimer to ensure UI is ready
+        QTimer.singleShot(100, lambda: self.connect_timing_signal())
         
         self.results_window.show()
         self.close()
+
+    def connect_timing_signal(self):
+        """Connect timing signal after UI is ready"""
+        if hasattr(self, 'search_worker') and hasattr(self.results_window, 'exact_timing_label'):
+            print("DEBUG - Connecting timing signal from landing page")
+            self.search_worker.timing_info.connect(self.results_window.update_timing_display)
+            
+            # If search is already completed, manually trigger timing display
+            if hasattr(self.search_worker, '_timing_data'):
+                self.results_window.update_timing_display(self.search_worker._timing_data)
     
     def show_error(self, error_msg):
         if hasattr(self, 'loading_dialog'):
@@ -557,7 +574,7 @@ class IntegratedHomePage(SearchApp):
             self.top_input.setText(str(self.search_params['top_matches']))
 
     def update_timing_display(self, timing_data):
-        """Update timing information display"""
+        """Update timing information display - ALWAYS show both exact and fuzzy"""
         exact_time = timing_data.get('exact_time', 0)
         fuzzy_time = timing_data.get('fuzzy_time', 0)
         exact_count = timing_data.get('exact_count', 0)
@@ -570,21 +587,27 @@ class IntegratedHomePage(SearchApp):
             exact_text = f"Exact Match: {total_scanned} CVs scanned in {exact_time:.0f}ms"
             if exact_count > 0:
                 exact_text += f" • {exact_count} results found"
+            else:
+                exact_text += f" • 0 results found"
             self.exact_timing_label.setText(exact_text)
+            self.exact_timing_label.show()  # Always show
         
         # Update fuzzy match timing
         if hasattr(self, 'fuzzy_timing_label'):
-            if fuzzy_time > 0:
+            if fuzzy_time > 0 and missing_keywords:
+                # Fuzzy search was performed
                 fuzzy_text = f"Fuzzy Match: {total_scanned} CVs scanned in {fuzzy_time:.0f}ms"
                 if fuzzy_count > 0:
                     fuzzy_text += f" • {fuzzy_count} additional results"
-                if missing_keywords:
-                    fuzzy_text += f" • Keywords: {', '.join(missing_keywords)}"
-                self.fuzzy_timing_label.setText(fuzzy_text)
-                self.fuzzy_timing_label.show()
+                else:
+                    fuzzy_text += f" • 0 additional results"
+                fuzzy_text += f" • Keywords: {', '.join(missing_keywords)}"
             else:
-                self.fuzzy_timing_label.setText("Fuzzy Match: Not needed (all keywords found)")
-                self.fuzzy_timing_label.show()
+                # No fuzzy search needed
+                fuzzy_text = f"Fuzzy Match: Not needed (all keywords found in exact match)"
+            
+            self.fuzzy_timing_label.setText(fuzzy_text)
+            self.fuzzy_timing_label.show()  # Always show
 
     def perform_new_search(self):
         keywords = self.keyword_input.text().strip()
@@ -662,7 +685,7 @@ class IntegratedHomePage(SearchApp):
         """)
         back_btn.clicked.connect(self.go_back_to_search)
         
-        # Search components (same as before)
+        # Search components
         method_label = QLabel("Method:")
         method_label.setStyleSheet("color: white; font-size: 14px;")
         
@@ -736,38 +759,35 @@ class IntegratedHomePage(SearchApp):
         self.results_label.setStyleSheet("color: white; font-size: 16px; font-weight: bold;")
         nav_search_layout.addWidget(self.results_label)
         
-        # Second row - timing information
-        self.timing_layout = QHBoxLayout()
-        self.timing_layout.setSpacing(20)
-        
-        # Exact match timing
-        self.exact_timing_label = QLabel("")
-        self.exact_timing_label.setStyleSheet("""
-            color: #00FFC6; 
-            font-size: 12px; 
-            background-color: #1A3A35;
-            border-radius: 8px;
-            padding: 5px 10px;
-        """)
-        
-        # Fuzzy match timing
-        self.fuzzy_timing_label = QLabel("")
-        self.fuzzy_timing_label.setStyleSheet("""
-            color: #FFB366; 
-            font-size: 12px; 
-            background-color: #3A2A1A;
-            border-radius: 8px;
-            padding: 5px 10px;
-        """)
-        
-        self.timing_layout.addWidget(self.exact_timing_label)
-        self.timing_layout.addWidget(self.fuzzy_timing_label)
-        self.timing_layout.addStretch()
-        
-        # Add both rows to main layout
+        # Add first row to main layout
         top_layout.addLayout(nav_search_layout)
-        top_layout.addLayout(self.timing_layout)
+
+        # Second row - Summary Result Section (SINGLE DECLARATION)
+        summary_layout = QVBoxLayout()
+        summary_layout.setAlignment(Qt.AlignCenter)
+        summary_layout.setSpacing(5)
+        summary_layout.setContentsMargins(20, 15, 20, 15)
         
+        # Exact match timing (Font 20, Color #E8EDED)
+        self.exact_timing_label = QLabel("")
+        self.exact_timing_label.setFont(QFont("Arial", 20))
+        self.exact_timing_label.setStyleSheet("color: #E8EDED; background: transparent;")
+        self.exact_timing_label.setAlignment(Qt.AlignCenter)
+        self.exact_timing_label.hide()  # Hidden initially
+        summary_layout.addWidget(self.exact_timing_label)
+        
+        # Fuzzy match timing (Font 20, Color #A5C5BE)
+        self.fuzzy_timing_label = QLabel("")
+        self.fuzzy_timing_label.setFont(QFont("Arial", 20))
+        self.fuzzy_timing_label.setStyleSheet("color: #A5C5BE; background: transparent;")
+        self.fuzzy_timing_label.setAlignment(Qt.AlignCenter)
+        self.fuzzy_timing_label.hide()  # Hidden initially
+        summary_layout.addWidget(self.fuzzy_timing_label)
+        
+        # Add summary layout to main layout
+        top_layout.addLayout(summary_layout)
+        
+        # Add complete top layout to main layout
         self.main_layout.addLayout(top_layout)
         
         # Populate search fields AFTER UI elements are created
@@ -841,7 +861,7 @@ class MainApplication(QApplication):
         super().__init__(sys_argv)
         self.setApplicationName("Bukit Duri CV Analyzer")
         self.load_fonts()
-        self.check_database_setup()
+        self.show_main_app()
     
     def load_fonts(self):
         """Load custom fonts for the application"""

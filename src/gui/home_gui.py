@@ -230,7 +230,7 @@ class SearchApp(QWidget):
         back_btn = QPushButton("<")
         back_btn.setFixedSize(50, 40)
         back_btn.setCursor(QCursor(Qt.PointingHandCursor))
-        back_btn.clicked.connect(self.go_back_to_landing)  # Add click handler
+        back_btn.clicked.connect(self.go_back_to_landing)
         back_btn.setStyleSheet("""
             QPushButton {
                 background-color: transparent;
@@ -335,6 +335,35 @@ class SearchApp(QWidget):
 
         self.main_layout.addLayout(filter_layout)
 
+        # === Summary Result Section ===
+        self.setupSummaryResultSection()
+
+    def setupSummaryResultSection(self):
+        """Setup Summary Result Section untuk menampilkan waktu eksekusi"""
+        # Container untuk timing information
+        summary_layout = QVBoxLayout()
+        summary_layout.setAlignment(Qt.AlignCenter)
+        summary_layout.setSpacing(5)
+        summary_layout.setContentsMargins(20, 20, 20, 20)
+        
+        # Exact Match timing (Font 20, Color #E8EDED)
+        self.exact_timing_label = QLabel("")
+        self.exact_timing_label.setFont(QFont("Arial", 20))
+        self.exact_timing_label.setStyleSheet("color: #E8EDED; background: transparent;")
+        self.exact_timing_label.setAlignment(Qt.AlignCenter)
+        self.exact_timing_label.hide()  # Hidden initially, akan ditampilkan setelah search
+        summary_layout.addWidget(self.exact_timing_label)
+        
+        # Fuzzy Match timing (Font 20, Color #A5C5BE)
+        self.fuzzy_timing_label = QLabel("")
+        self.fuzzy_timing_label.setFont(QFont("Arial", 20))
+        self.fuzzy_timing_label.setStyleSheet("color: #A5C5BE; background: transparent;")
+        self.fuzzy_timing_label.setAlignment(Qt.AlignCenter)
+        self.fuzzy_timing_label.hide()  # Hidden initially, akan ditampilkan setelah search
+        summary_layout.addWidget(self.fuzzy_timing_label)
+        
+        self.main_layout.addLayout(summary_layout)
+
     def go_back_to_landing(self):
         """Handle back button click"""
         try:
@@ -357,6 +386,10 @@ class SearchApp(QWidget):
         method = self.method_dropdown.currentText()
         top_matches = int(self.top_input.text() or "3")
         
+        # Hide timing labels during search
+        self.exact_timing_label.hide()
+        self.fuzzy_timing_label.hide()
+        
         # Fix import - import SearchWorker from main_gui
         try:
             current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -373,12 +406,47 @@ class SearchApp(QWidget):
             # Create search worker
             self.search_worker = SearchWorker(keywords, method, top_matches, "")
             self.search_worker.results_ready.connect(self.update_search_results)
+            self.search_worker.timing_info.connect(self.update_timing_display)  # Connect timing signal
             self.search_worker.error_occurred.connect(self.search_error)
             self.search_worker.start()
             
         except Exception as e:
             QMessageBox.critical(self, "Import Error", f"Could not import SearchWorker: {str(e)}")
             print(f"SearchWorker import error: {e}")
+
+    def update_timing_display(self, timing_data):
+        """Update timing information display - ALWAYS show both exact and fuzzy"""
+        exact_time = timing_data.get('exact_time', 0)
+        fuzzy_time = timing_data.get('fuzzy_time', 0)
+        exact_count = timing_data.get('exact_count', 0)
+        fuzzy_count = timing_data.get('fuzzy_count', 0)
+        total_scanned = timing_data.get('total_scanned', 0)
+        missing_keywords = timing_data.get('missing_keywords', [])
+        
+        # ALWAYS update exact match timing (Font 20, Color #E8EDED)
+        exact_text = f"Exact Match: {total_scanned} CVs scanned in {exact_time:.0f}ms"
+        if exact_count > 0:
+            exact_text += f" • {exact_count} results found"
+        else:
+            exact_text += f" • 0 results found"
+        self.exact_timing_label.setText(exact_text)
+        self.exact_timing_label.show()  # Always show
+        
+        # ALWAYS update fuzzy match timing (Font 20, Color #A5C5BE)
+        if fuzzy_time > 0 and missing_keywords:
+            # Fuzzy search was performed
+            fuzzy_text = f"Fuzzy Match: {total_scanned} CVs scanned in {fuzzy_time:.0f}ms"
+            if fuzzy_count > 0:
+                fuzzy_text += f" • {fuzzy_count} additional results"
+            else:
+                fuzzy_text += f" • 0 additional results"
+            fuzzy_text += f" • Keywords: {', '.join(missing_keywords)}"
+        else:
+            # No fuzzy search needed (all keywords found in exact match)
+            fuzzy_text = f"Fuzzy Match: Not needed (all keywords found in exact match)"
+        
+        self.fuzzy_timing_label.setText(fuzzy_text)
+        self.fuzzy_timing_label.show()  # Always show
 
     def update_search_results(self, results):
         if hasattr(self, 'loading_dialog'):
