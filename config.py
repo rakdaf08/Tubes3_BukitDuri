@@ -15,8 +15,10 @@ SEARCH_SETTINGS = {
 ENCRYPTION_SETTINGS = {
     'enabled': True,  # Set to False untuk disable encryption
     'encrypt_fields': [
-        'first_name', 'last_name', 'date_of_birth', 
-        'address', 'phone_number', 'application_role'
+        'first_name', 
+        'last_name', 
+        'address', 
+        'phone_number'
     ],
-    'master_key_env': 'BukitDuri_SecureKey_CV_Analyzer'
+    'master_key': 'BukitDuri_SecureKey_CV_Analyzer'
 }

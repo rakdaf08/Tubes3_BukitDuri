@@ -130,4 +130,9 @@ class AdvancedEncryption:
             return None
 
 # Global encryption instance
-encryption_engine = AdvancedEncryption()
+try:
+    from config import ENCRYPTION_SETTINGS
+    master_key = ENCRYPTION_SETTINGS.get('master_key', 'BukitDuri2024')
+    encryption_engine = AdvancedEncryption(master_key)
+except ImportError:
+    encryption_engine = AdvancedEncryption()

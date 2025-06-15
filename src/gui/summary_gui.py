@@ -13,18 +13,18 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 parent_dir = os.path.dirname(current_dir)
 sys.path.append(parent_dir)
 
-from config import ENCRYPTION_SETTINGS
-from core.extractor import extract_profile_data
-
-# Import encryption status
+# Import config and encryption settings
 try:
-    from encryption_engine import AdvancedEncryption
+    from config import ENCRYPTION_SETTINGS
     ENCRYPTION_ENABLED = ENCRYPTION_SETTINGS.get('enabled', False)
     ENCRYPTED_FIELDS = ENCRYPTION_SETTINGS.get('encrypt_fields', [])
+    print(f"DEBUG - Encryption enabled in summary: {ENCRYPTION_ENABLED}")
 except ImportError:
-    print("Warning: Encryption engine not available in summary_gui")
+    print("Warning: Could not import ENCRYPTION_SETTINGS")
     ENCRYPTION_ENABLED = False
     ENCRYPTED_FIELDS = []
+
+from core.extractor import extract_profile_data
 
 class SummaryPage(QWidget):
     def __init__(self, resume_data=None):
@@ -114,7 +114,7 @@ class SummaryPage(QWidget):
         layout.addStretch()
 
     def create_header(self, layout):
-        """Create header with back button same as home_gui"""
+        """Create header with back button and encryption status"""
         header = QHBoxLayout()
         
         # Back button - same style as home_gui
@@ -133,13 +133,35 @@ class SummaryPage(QWidget):
             }
         """)
         back_btn.clicked.connect(self.go_back)
-
-        enc_status = QLabel("🔒 Encrypted" if ENCRYPTION_ENABLED else "🔓 Plain")
-        enc_status.setStyleSheet("color: #00FFC6; font-size: 12px;")
-    
-
+        
+        # Debug encryption status
+        print(f"DEBUG - Creating header with encryption status: {ENCRYPTION_ENABLED}")
+        
+        # Encryption status dengan debug info
+        try:
+            # Check if encryption is enabled and working
+            encryption_working = ENCRYPTION_ENABLED
+            
+            if encryption_working:
+                status_text = "🔒 Encrypted Data"
+                status_color = "#00FFC6"
+                print("DEBUG - Showing encrypted status")
+            else:
+                status_text = "🔓 Plain Data"
+                status_color = "#FFB366"
+                print("DEBUG - Showing plain status")
+                
+        except Exception as e:
+            print(f"DEBUG - Error checking encryption: {e}")
+            status_text = "🔓 Plain Data"
+            status_color = "#FFB366"
+        
+        enc_status = QLabel(status_text)
+        enc_status.setStyleSheet(f"color: {status_color}; font-size: 14px; font-weight: bold;")
+        
         header.addWidget(back_btn)
         header.addStretch()
+        header.addWidget(enc_status)  # Make sure this is added!
         layout.addLayout(header)
 
     def create_candidate_name(self, layout):

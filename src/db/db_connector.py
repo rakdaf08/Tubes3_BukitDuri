@@ -11,11 +11,19 @@ from config import DATABASE_CONFIG, ENCRYPTION_SETTINGS
 
 # Import custom encryption
 try:
-    from encryption_engine import encryption_engine
+    from encryption.encryption_engine import AdvancedEncryption
     ENCRYPTION_ENABLED = ENCRYPTION_SETTINGS.get('enabled', False)
     ENCRYPTED_FIELDS = ENCRYPTION_SETTINGS.get('encrypt_fields', [])
+    
+    if ENCRYPTION_ENABLED:
+        master_key = ENCRYPTION_SETTINGS.get('master_key', 'BukitDuri2024')
+        encryption_engine = AdvancedEncryption(master_key)
+        print("✓ Encryption engine loaded and enabled")
+    else:
+        print("⚠️ Encryption is disabled in config")
+        
 except ImportError:
-    print("Warning: Encryption engine not available")
+    print("❌ Warning: Encryption engine not available")
     ENCRYPTION_ENABLED = False
     ENCRYPTED_FIELDS = []
 
